@@ -113,6 +113,14 @@ jobs:
       - name: Run dependency security regression tests
         run: npm run test:security
 
+      - name: Run native browser regression tests
+        shell: bash
+        run: |
+          browser_path="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+          test -n "$browser_path"
+          "$browser_path" --version
+          CHROMIUM_PATH="$browser_path" npm run test:browser
+
       - name: Build production extension
         run: npm run build
 
