@@ -47,10 +47,13 @@ a new candidate or release head. Run the complete workflow at that exact head.
 The local `vendor/bigint-buffer` implementation replaces the old native package,
 validates fixed-width conversions and is covered by a focused round-trip/bounds
 test. Native Argon2 and its install script remain in the lockfile through the
-pinned SDK. Hosted installation runs normal `npm ci --legacy-peer-deps`, with
-dependency lifecycle scripts enabled. Local checks using `--ignore-scripts` do
-not establish that hosted installation succeeds. Browser WASM encryption is a
-separate qualification boundary.
+pinned SDK. Hosted installation uses `npm ci --legacy-peer-deps` without an
+explicit `--ignore-scripts` flag. Actual script execution depends on the npm
+version and install-script approval policy; inspect the toolchain and install
+log rather than inferring native Argon2 execution from a passing install.
+Local checks using `--ignore-scripts` do not establish hosted installation or
+native lifecycle execution. Browser WASM encryption is a separate qualification
+boundary.
 
 Do not lower the audit threshold, add an ignore list, or use
 `continue-on-error` to make a real-funds release appear green. Assess any
