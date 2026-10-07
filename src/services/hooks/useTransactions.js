@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Zenon } from 'znn-ts-sdk';
+import { captureHistoryNetwork } from '../wallet/historyObservation';
 
 import { embeddedContractName } from '../utils/contracts';
 import { decodeCall, describeCall, contractDisplayName } from '../utils/contractCalls';
@@ -66,11 +67,18 @@ const useTransactions = (addressObject, address) => {
   const page = useRef(0);
   const loading = useRef(false);
   const mounted = useRef(true);
+  const observationGeneration = useRef(0);
+  const liveAddress = useRef(address);
+  if (liveAddress.current !== address) {
+    observationGeneration.current += 1;
+    liveAddress.current = address;
+  }
 
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
+      observationGeneration.current += 1;
     };
   }, []);
 
@@ -180,30 +188,41 @@ const useTransactions = (addressObject, address) => {
     }
     try {
       const zenon = Zenon.getSingleton();
+      const context = captureHistoryNetwork(zenon);
+      const generation = observationGeneration.current;
+      const isCurrent = () => mounted.current && liveAddress.current === address &&
+        observationGeneration.current === generation && context.isCurrent();
       const response = await zenon.ledger.getBlocksByPage(addressObject, 0, pageSize);
       const list = response?.list || [];
 
-      if (!list.length || !mounted.current) {
+      if (!list.length || !isCurrent()) {
         return;
       }
       const expanded = await Promise.all(list.map((block) => expand(zenon, block)));
       const rows = expanded.map((block, index) => transform(block, list[index]));
 
-      if (!mounted.current) {
+      if (!isCurrent()) {
         return;
       }
       setItems((previous) => {
+        if (!isCurrent()) return previous;
         const known = new Set(previous.map((row) => row.hash));
         const updated = previous.map((row) => rows.find((fresh) => fresh.hash === row.hash) || row);
         const added = rows.filter((row) => !known.has(row.hash));
         return [...added, ...updated];
       });
+      // Use the account's own block hashes. Expanded receive rows carry the
+      // originating send hash for display, which is a different transaction.
+      const hashes = list.filter((block) => block.address?.toString() === address)
+        .map((block) => block.hash?.toString()).filter((hash) => typeof hash === 'string' && hash);
+      return { owner: address, network: context.network, hashes, isCurrent };
     } catch (err) {
       // A failed refresh leaves the list exactly as it was.
     }
   }, [addressObject, address, expand, transform]);
 
   const reset = useCallback(() => {
+    observationGeneration.current += 1;
     page.current = 0;
     loading.current = false;
     setItems([]);
