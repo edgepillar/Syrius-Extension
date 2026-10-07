@@ -41,7 +41,7 @@ const ChangeNode = () => {
     const parsed = parseChainId(value);
 
     if (parsed === null) {
-      notify.error('The chain identifier must be a whole number, 1 or higher.');
+      notify.error('Enter a whole number from 1 to 9007199254740991.');
       return;
     }
     Zenon.setChainIdentifier(parsed);

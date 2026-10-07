@@ -4,16 +4,25 @@ import { Constants } from 'znn-ts-sdk';
 // go-zenon. It is what the SDK signs for while nothing else has been stored.
 const mainnetChainId = Constants.defaultChainId;
 
-// The chain identifier is serialized into every block before it gets signed, so
-// anything that is not a positive whole number is a wallet that cannot transact.
+// Chain identifiers reach the SDK as JavaScript numbers. Reject coercion and
+// rounding before a value can be stored or serialized into a signed block.
 const parseChainId = (input) => {
-  const parsed = Number((input + "").trim());
+  let parsed;
+  if (typeof input === 'number') {
+    parsed = input;
+  } else if (typeof input === 'string') {
+    const text = input.trim();
+    if (!/^[1-9]\d*$/.test(text)) return null;
+    parsed = Number(text);
+  } else {
+    return null;
+  }
 
-  if (!Number.isInteger(parsed) || parsed < 1) {
+  if (!Number.isSafeInteger(parsed) || parsed < 1) {
     return null;
   }
   return parsed;
-}
+};
 
 const detectionTimeout = 5000;
 
