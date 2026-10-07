@@ -1824,6 +1824,15 @@ button:disabled {
   white-space: nowrap;
 }
 
+// Approval authority must remain readable in the narrow popup. Unlike the
+// compact connected-site list, the full scheme, host and port are never elided.
+.site-host.approval-origin {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .site-origin,
 .site-title {
   color: var(--text-faint);

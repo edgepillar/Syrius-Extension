@@ -300,6 +300,43 @@ const watchdog = setTimeout(() => { console.error('Request identity checks timed
     assert.equal(f.local['syrius.permissions']['https://unapproved.invalid'], undefined, 'only a claimed connect grants consent');
   }
   const label = { connect: 'Connect', sendTransaction: 'Confirm', signAndSendBlock: 'Sign and send', signMessage: 'Sign' };
+  // The browser-authenticated origin is complete, including scheme and port,
+  // even when a long hostname would be truncated by the old compact header.
+  for (const scheme of ['http', 'https']) {
+    const origin = `${scheme}://${'long-label-'.repeat(5)}site.fixture.invalid:8080`;
+    const f = fixture(); await f.add({ ...entry('origin-' + scheme, 'doc-a', 'connect'), origin, title: 'Inert page title' });
+    const view = f.ui(); await view.settle(); const html = view.markup();
+    assert(html.includes(origin), 'approval displays the complete origin');
+    assert.equal(html.includes('This site uses an insecure HTTP connection.'), scheme === 'http');
+    assert(html.includes('Inert page title')); view.dispose();
+  }
+  // Network rows are visible before a transfer is approved and do not expose
+  // credentials, private endpoint paths, query strings or fragments.
+  {
+    const f = fixture(); await f.add(entry('network-transfer', 'doc-a', 'sendTransaction'));
+    const view = f.ui();
+    view.state.connectionParameters.nodeUrl = 'wss://fixture-user:fixture-value@node.fixture.invalid:35998/private-route?fixture=hidden#detail';
+    await view.settle(); const html = view.markup();
+    assert.match(html, /Selected signing chain<\/dt><dd class="word-break-all">1<\/dd>/);
+    assert(html.includes('wss://node.fixture.invalid:35998'));
+    for (const privatePart of ['fixture-user', 'fixture-value', '/private-route', 'fixture=hidden', '#detail']) assert(!html.includes(privatePart));
+    view.dispose();
+  }
+  // Preserve the explicit raw-block chain while making its difference from
+  // the selected chain prominent. This change does not introduce a new policy.
+  {
+    const f = fixture(), params = block(); params.chainIdentifier = 69;
+    await f.add({ ...entry('network-raw', 'doc-a', 'signAndSendBlock'), params });
+    const view = f.ui(); await view.settle(); const html = view.markup();
+    assert.match(html, /Selected signing chain<\/dt><dd class="word-break-all">1<\/dd>/);
+    assert.match(html, /Effective block chain<\/dt><dd class="word-break-all">69<\/dd>/);
+    assert(html.includes('wss://fixture.invalid'));
+    assert.match(html, /different chain identifier from the selected signing chain/);
+    assert.equal(view.button('Sign and send').props.disabled, false);
+    await view.button('Sign and send').props.onClick();
+    assert.equal(f.delivered[0].value.result.block.chainIdentifier, 69);
+    assert.equal(f.counts.signs, 1); assert.equal(f.counts.publishes, 1); view.dispose();
+  }
   for (const type of Object.keys(label)) {
     const f = fixture(); const row = await f.add(entry('ui-' + type, 'doc-a', type));
     const first = f.ui(10), second = f.ui(11); await first.settle(); await second.settle();

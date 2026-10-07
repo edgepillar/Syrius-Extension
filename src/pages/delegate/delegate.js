@@ -86,6 +86,7 @@ const Delegate = () => {
   const delegate = (name) =>
     openModal(
       <AlertModal
+        transaction
         type="confirm"
         title="Delegate"
         confirmLabel="Delegate"
@@ -107,6 +108,7 @@ const Delegate = () => {
   const undelegate = () =>
     openModal(
       <AlertModal
+        transaction
         type="warning"
         title="Undelegate"
         confirmLabel="Undelegate"

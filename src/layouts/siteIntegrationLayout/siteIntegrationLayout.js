@@ -4,6 +4,7 @@ import { useSelector } from 'react-redux';
 import { Primitives } from 'znn-ts-sdk';
 
 import TokenAmount from '../../components/token-amount/token-amount';
+import TransactionNetwork from '../../components/transaction-network/transaction-network';
 import { authorizationMetadata, normalizeBaseUnits } from '../../services/wallet/tokenMetadata';
 import useAccount from '../../services/hooks/useAccount';
 import useBlockSender from '../../services/hooks/useBlockSender';
@@ -78,7 +79,10 @@ const SiteHeader = ({ request }) => (
       <div className="site-favicon site-favicon-blank" />
     )}
     <div className="site-header-text">
-      <div className="site-host">{hostOf(request.origin)}</div>
+      <div className="site-host approval-origin">{typeof request.origin === 'string' && request.origin ? request.origin : 'Unknown site'}</div>
+      {typeof request.origin === 'string' && request.origin.startsWith('http:') && (
+        <div className="approval-warning" role="alert">This site uses an insecure HTTP connection.</div>
+      )}
       {/* Many pages title themselves after their own URL, and printing the host
           twice is noise rather than information. */}
       {request.title && request.title !== hostOf(request.origin) && (
@@ -467,6 +471,7 @@ const SiteIntegrationLayout = () => {
         <>
           <div className="approval-body">
             <h2 className="approval-title">Confirm transfer</h2>
+            <TransactionNetwork chainIdentifier={chainIdentifier} nodeUrl={nodeUrl} />
 
             {(() => {
               const { to, tokenStandard, amount } = request.params;
@@ -554,6 +559,8 @@ const SiteIntegrationLayout = () => {
         <>
           <div className="approval-body">
             <h2 className="approval-title">Sign this block?</h2>
+            <TransactionNetwork chainIdentifier={chainIdentifier}
+              nodeUrl={blockApproval?.nodeUrl ?? nodeUrl} effectiveChainIdentifier={preparedBlock?.chainIdentifier} />
 
             {!preparedBlock ? (
               <p className={previewed?.error ? 'approval-warning' : 'approval-note'} role="status">
