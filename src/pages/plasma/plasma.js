@@ -260,7 +260,7 @@ const Plasma = () => {
     const isSelf = trimmedRecipient === address;
 
     openModal(
-      <AlertModal type="confirm" title="Fuse plasma" confirmLabel="Fuse" onSuccess={fuse}>
+      <AlertModal transaction type="confirm" title="Fuse plasma" confirmLabel="Fuse" onSuccess={fuse}>
         <p>
           Fuse <b>{amount} QSR</b> for plasma
           {isSelf ? (
@@ -279,6 +279,7 @@ const Plasma = () => {
   const confirmCancel = (id) =>
     openModal(
       <AlertModal
+        transaction
         type="warning"
         title="Cancel fuse"
         confirmLabel="Cancel fuse"

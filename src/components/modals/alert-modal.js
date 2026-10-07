@@ -1,5 +1,6 @@
 import React, { useContext } from 'react';
 import { ModalContext } from '../../services/hooks/modal/modalContext';
+import { SelectedTransactionNetwork } from '../transaction-network/transaction-network';
 
 // The confirmation dialog.
 //
@@ -13,7 +14,7 @@ const styles = {
   danger: { accent: 'warning', confirmLabel: 'Remove', confirmClass: 'warning' },
 };
 
-const AlertModal = ({ children, title, type = 'confirm', onDismiss, onSuccess, confirmLabel }) => {
+const AlertModal = ({ children, title, type = 'confirm', onDismiss, onSuccess, confirmLabel, transaction = false }) => {
   const { closeModal } = useContext(ModalContext);
   const style = styles[type] || styles.confirm;
 
@@ -39,6 +40,7 @@ const AlertModal = ({ children, title, type = 'confirm', onDismiss, onSuccess, c
       <div className={`modal-divider ${style.accent}`} />
 
       <div className="modal-content">
+        {transaction && <SelectedTransactionNetwork />}
         {children}
 
         <div className="modal-action-area">
