@@ -1,83 +1,91 @@
 # Privacy Policy for Syrius Extension
 
 **Effective Date:** July 28, 2025
-**Last Updated:** July 28, 2025
+**Last Updated:** October 5, 2026
 
-## Overview
+## Scope
 
-Syrius Extension is a non-custodial cryptocurrency wallet for the Zenon Network blockchain. This privacy policy explains how we handle information when you use our browser extension.
+This document describes the browser extension maintained in
+[sol-znn/syrius-extension](https://github.com/sol-znn/syrius-extension).
+It covers the extension's local storage and network requests. Websites, RPC
+operators, price providers and block explorers have their own data practices.
 
-## Information We Do Not Collect
+## Wallet and local storage
 
-We do **not** collect, store, transmit, or have access to:
-- Personal information (name, email, phone, address)
-- Browsing history or website activity
-- Private keys or seed phrases
-- Transaction details or wallet balances
-- Usage analytics or tracking data
-- Device information or identifiers
+Wallet creation, recovery, key derivation and signing happen in the extension.
+Persisted wallet keyfiles are encrypted with the password through the pinned
+Zenon SDK. The extension does not send passwords, private keys or recovery
+phrases to its RPC or price providers.
 
-## Information Stored Locally
+An unlocked wallet holds decrypted key material in its extension context.
+Timed sessions also keep recovery entropy in `chrome.storage.session` so a
+trusted extension window can restore the current unlock. That temporary record
+is not encrypted with the wallet password. An **On close** session is restricted
+to the window that unlocked it. Locking or expiry revokes the unlock authority
+and removes the saved unlock record. These controls do not guarantee secure
+erasure from browser or operating-system memory.
 
-The following data is stored **only on your device** and never transmitted to us:
-- Encrypted wallet data (private keys, seed phrases)
-- User preferences and settings
-- Transaction history for display purposes
-- Network configuration settings
+Other local records include preferences, node URLs, wallet and address labels,
+connected-site origins and account permissions. Temporary approval requests
+contain the requesting origin, document metadata and request parameters and
+are held in session storage until completion, cancellation or expiry.
+These records are not all encrypted. Removing a wallet cleans its associated
+metadata and permissions; browser extension removal clears its local storage.
 
-This data remains on your device and is never shared with us or third parties.
+## Network requests
 
-## Blockchain Interactions
+- **Configured RPC node:** the extension queries account addresses, balances,
+  transaction history and contract state, and sends signed account blocks.
+  The node receives those requests and the connection's network metadata,
+  including the IP address. Operators may log requests. Signed transactions
+  published to the blockchain are public.
+- **CoinGecko:** USD price requests identify the supported ZNN and QSR tokens.
+  The price URL does not include a wallet address or balance. CoinGecko still
+  receives the connection's network metadata, including the IP address.
+- **Requesting-site icons:** an approval screen can load a site's favicon URL.
+  The icon server receives the browser request and its network metadata.
+- **Block explorers:** opening an explorer link sends the linked public address
+  or block identifier to the selected explorer through the browser.
 
-When using the extension:
-- Transaction data is sent directly to the Zenon Network blockchain
-- Blockchain transactions are public by nature and visible on the network
-- We do not monitor, record, or have access to your transactions
-- Network requests go directly from your device to blockchain nodes
+The reviewed source does not include a dedicated analytics or crash-reporting
+service. This does not make RPC, price, icon or explorer requests anonymous,
+and it does not describe what those providers do with received data.
 
-## Third-Party Services
+## Websites and permissions
 
-The extension connects to:
-- **Zenon Network RPC nodes** - to read blockchain data and broadcast transactions
-- **No analytics services** - we do not use Google Analytics, tracking pixels, or similar services
-- **No external APIs** - beyond blockchain network connectivity
+The manifest injects the `window.zenon` provider into HTTP and HTTPS pages,
+including frames. A page does not receive wallet permission simply because the
+provider is present. The extension checks the origin, current document, wallet
+account and consent before releasing account information or accepting signing
+requests. Review each approval's origin and transaction details.
 
-## Data Security
+The Manifest V3 extension requests:
 
-- All sensitive data is encrypted before local storage
-- We never have access to your private keys or seed phrases
-- Your wallet data never leaves your device
-- No remote access or backdoors exist
+- `storage` for encrypted keyfiles, preferences, permissions and temporary
+  unlock and approval records;
+- `alarms` for session and approval expiry;
+- `webNavigation` to bind requests and events to the browser's current document
+  and invalidate stale navigation contexts.
 
-## Children's Privacy
+Document tracking supports authorization checks. The reviewed source does not
+upload a browsing-history log to a maintainer service. The browser may display
+a broad permission warning because the provider is injected across websites.
 
-Our extension is not directed at children under 13. We do not knowingly collect information from children.
+## Controls and limits
 
-## Changes to This Policy
+Use **Settings → Connected sites** to revoke a site's access, **Auto-lock** to
+choose the unlock policy, and **Node management** to choose the RPC endpoint.
+Hiding balances changes their display; it does not prevent account queries to
+the configured node. Exporting or copying recovery content intentionally exposes
+it to the screen or system clipboard; handle it privately.
 
-We may update this privacy policy occasionally. Changes will be posted on this page with an updated "Last Updated" date.
+Keep a private recovery backup before removing a wallet or uninstalling the
+extension. Do not include passwords, recovery phrases, private keys, keyfiles
+or identifying wallet records in public bug reports.
 
-## Your Rights
+## Changes and contact
 
-Since we do not collect personal data:
-- There is no data to access, correct, or delete from our servers
-- Your wallet data on your device can be removed by uninstalling the extension
-- No data portability is needed as all data stays with you
-
-## Contact Information
-
-For questions about this privacy policy:
-- **GitHub Issues:** [https://github.com/MichZNN/syrius-extension/issues](https://github.com/MichZNN/syrius-extension/issues)
-- **Repository:** [https://github.com/MichZNN/syrius-extension](https://github.com/MichZNN/syrius-extension)
-
-## Technical Details
-
-- **Extension ID:** epgnegebjlojknnnhjjlcmobdljjenah
-- **Manifest Version:** 3
-- **Permissions Used:** 
-  - `storage` - for local wallet data storage
-  - Network access - for blockchain connectivity only
-
----
-
-*This privacy policy applies only to the Syrius Extension browser extension and not to any websites, services, or applications that may be accessed through the extension.*
+Updates to this document will change the date above. For questions, use
+[the repository's issues](https://github.com/sol-znn/syrius-extension/issues).
+The extension ID depends on how the package is distributed or loaded, so this
+document does not assign one ID to every installation.
