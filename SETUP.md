@@ -19,17 +19,31 @@ installation for this project.
 ## 2. Install and build
 
 ~~~powershell
-git clone https://github.com/MichZNN/syrius-extension.git
+git clone https://github.com/sol-znn/syrius-extension.git
 Set-Location syrius-extension
 & 'C:\Program Files\nodejs\npm.cmd' ci --legacy-peer-deps
 & 'C:\Program Files\nodejs\npm.cmd' run lint
+
+# Create a separate source-only checkout for the embedded ABI comparator.
+git clone --no-checkout https://github.com/zenon-network/go-zenon.git ../go-zenon-abi
+git -C ../go-zenon-abi checkout --detach 667a69d9e9a418edf7580b08492ba5dcb9efd63a
+$env:GO_ZENON_ABI_DIR = '../go-zenon-abi/vm/embedded/definition'
+
 & 'C:\Program Files\nodejs\npm.cmd' test
+& 'C:\Program Files\nodejs\node.exe' --test utils/validation-gates-test.js
 & 'C:\Program Files\nodejs\npm.cmd' run test:security
 & 'C:\Program Files\nodejs\npm.cmd' run build
 ~~~
 
 The generated production extension is in the build directory. The browser
 loads the generated files, not the source directory.
+
+The ABI comparator requires go-zenon's source definitions and fails when they
+are missing or contain no ABI functions. It needs no Go compiler or running
+Zenon node. CI checks out the revision above with a sparse checkout; local tests use
+GO_ZENON_ABI_DIR, or the legacy ../go-zenon/vm/embedded/definition location when
+the variable is unset. Changing this pinned reference requires reviewing the
+decoder against the new protocol definitions.
 
 ## 3. Load in Chrome or Brave
 
@@ -50,9 +64,19 @@ regression checks, and creates a Chrome/Brave-ready ZIP with a SHA-256
 checksum. The workflow artifact is the ZIP itself, without a second artifact
 archive; the checksum is attached to the GitHub Release.
 
-The current extension version is 0.3.4. A push to `main` automatically creates
+CI also runs the four native browser fixtures with its installed Chrome or
+Chromium. Locally, set CHROMIUM_PATH to your browser executable and run
+npm run test:browser. These checks use disposable profiles and synthetic data;
+they do not contact a Zenon network or qualify real wallet encryption.
+
+Download the ZIP and its .sha256 file into the same directory. On systems with
+GNU coreutils, run `sha256sum --check syrius-extension-0.3.4-chrome-brave.zip.sha256`
+there. The checksum records the ZIP's basename, so it does not depend on a CI
+workspace directory.
+
+The current source version is 0.3.4. A push to `main` automatically creates
 the matching `v0.3.4` tag and publishes the ZIP assets to a GitHub Release.
-Pushes to `development` and `manifest-v3` only create validation artifacts.
+Pushes to `master`, `development` and `manifest-v3` only create validation artifacts.
 
 For a manual tag-triggered release instead of the automatic `main` release:
 
@@ -72,10 +96,11 @@ plan.
 
 ## 5. Session, auto-lock and balance privacy
 
-Closing the popup keeps the wallet session active. By default, the temporary
-unlocked session is locked after 30 minutes without activity. The period can be
-changed under **Settings → Auto-lock**. Auto-lock clears only the temporary
-session credentials; the encrypted wallet remains in extension storage.
+The default timed session can be restored after closing the popup until its
+15-minute inactivity deadline. Change the period under **Settings → Auto-lock**.
+The **On close** option belongs to the unlocking window and cannot be restored
+by another window. Locking revokes the session's authority and clears its saved
+unlock record; the encrypted wallet remains in extension storage.
 
 Use the eye button on the dashboard to hide or show balance amounts. Hidden
 amounts are displayed as *** and the preference is stored locally.
@@ -83,40 +108,34 @@ amounts are displayed as *** and the preference is stored locally.
 ## 6. Nodes and Chain ID
 
 Use **Settings → Node management** to select a reachable WebSocket endpoint or
-add a custom node. The Chain ID must match the network the node serves; the
-mainnet default is 1 and the testnet endpoint uses 3.
+add a custom node. The Chain ID must match the network the node serves. The
+pinned SDK defaults to Chain ID 1; the local development harness uses 69.
+Confirm any testnet identifier with that network's operator rather than
+reusing the mainnet or development value.
 
-The maintained endpoints are:
-
-- wss://127.0.0.1:35998 (local node, when configured)
-- wss://node.zenonhub.io:35998 (mainnet)
-- wss://my.hc1node.com:35998 (mainnet)
-- wss://node.atsocy.com:35998 (mainnet)
-- wss://rpc.testnet.zenon.info (testnet, Chain ID 3)
-
-Only use a node you trust. Test a custom node with a harmless testnet action
-before signing a mainnet transaction.
+The default node list is defined in src/services/utils/storage.js and the
+currently selected URL is shown in Settings. An endpoint being listed does
+not establish its availability, network identity or trustworthiness. A successful
+WebSocket connection does not authenticate the chain. Verify both the endpoint
+and Chain ID before signing.
 
 ## 7. Bridge testing
 
-Test with staging or testnet first. The extension only activates on origins
-listed in src/manifest.json. Refresh the bridge tab after reloading the
-extension so its content scripts are injected again.
+Test with an isolated staging or testnet setup first. The manifest injects the
+provider into HTTP and HTTPS pages, including frames. Access to wallet data and
+signing is controlled by the extension's origin and account permissions and
+individual approval requests. Refresh the page after reloading the extension.
 
 For every signing request, verify the origin, destination, token, exact amount,
 node and Chain ID in the approval screen before approving.
-
-https://bridge.mainnet.zenon.community/ and
-http://testnet.bridge.0x3639.com/ remain listed for future compatibility, but
-their deployments may be offline.
 
 ## 8. Troubleshooting
 
 ### The extension does not appear on a bridge page
 
-Check that the scheme and hostname exactly match an origin in the manifest.
-HTTPS and HTTP are different origins. Rebuild, reload the extension, and
-refresh the bridge page.
+The provider is injected into HTTP and HTTPS pages. HTTPS and HTTP are different
+permission origins. Rebuild, reload the extension, refresh the page, and check
+Settings → Connected sites for the current origin and wallet account.
 
 ### The popup or service worker reports an error
 
@@ -133,6 +152,7 @@ and revoke/reconnect the origin if necessary.
 
 ### A node connection fails
 
-Confirm that the endpoint is reachable, uses the correct wss:// scheme, and
-has the correct Chain ID. A local endpoint only works when a compatible local
-WSS node is running and trusted by the browser.
+Confirm that the endpoint is reachable and has the correct Chain ID. Prefer
+wss:// for remote endpoints; the local development harness uses ws://localhost.
+A local endpoint only works when a compatible local node is running. Connection
+success does not independently verify the network's identity.

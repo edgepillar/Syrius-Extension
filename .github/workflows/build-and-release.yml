@@ -91,11 +91,35 @@ jobs:
       - name: Lint source
         run: npm run lint
 
+      - name: Check out pinned embedded ABI source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: zenon-network/go-zenon
+          ref: 667a69d9e9a418edf7580b08492ba5dcb9efd63a
+          path: .test-fixtures/go-zenon
+          sparse-checkout: vm/embedded/definition
+          persist-credentials: false
+
       - name: Run focused regression tests
+        env:
+          GO_ZENON_ABI_DIR: .test-fixtures/go-zenon/vm/embedded/definition
         run: npm test
+
+      - name: Check validation failure paths
+        env:
+          GO_ZENON_ABI_DIR: .test-fixtures/go-zenon/vm/embedded/definition
+        run: node --test utils/validation-gates-test.js
 
       - name: Run dependency security regression tests
         run: npm run test:security
+
+      - name: Run native browser regression tests
+        shell: bash
+        run: |
+          browser_path="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+          test -n "$browser_path"
+          "$browser_path" --version
+          CHROMIUM_PATH="$browser_path" npm run test:browser
 
       - name: Build production extension
         run: npm run build
@@ -166,11 +190,12 @@ jobs:
           skip-decompress: true
 
       - name: Recreate release checksum
+        working-directory: release-assets
         env:
           MANIFEST_VERSION: ${{ needs.build.outputs.manifest_version }}
         shell: bash
         run: |
-          archive="release-assets/syrius-extension-${MANIFEST_VERSION}-chrome-brave.zip"
+          archive="syrius-extension-${MANIFEST_VERSION}-chrome-brave.zip"
           test -f "$archive"
           sha256sum "$archive" > "${archive}.sha256"
 
