@@ -8,6 +8,7 @@ on:
       - master
       - development
       - manifest-v3
+      - codex/qualify-2026-10-08
     tags:
       - 'v*'
   workflow_dispatch:
