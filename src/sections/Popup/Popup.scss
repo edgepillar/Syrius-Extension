@@ -1853,15 +1853,14 @@ button:disabled {
   overflow-wrap: anywhere;
 
   // Long origins and review data must remain reachable at narrow/zoomed sizes.
-  // Scroll the complete review while keeping its action row in view.
+  // Focus scrolls actions into view after the complete review.
   > .site-header,
   > .approval-note {
     flex: 0 0 auto;
   }
 
+  // Keep actions in normal flow so they cannot cover preview text.
   > .sticky-actions {
-    position: sticky;
-    bottom: 0;
     flex: 0 0 auto;
     background: var(--bg);
     padding: 8px 0;

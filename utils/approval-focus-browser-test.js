@@ -153,6 +153,18 @@ queue=[request()];createRoot(document.querySelector('#app-container')).render(<P
     await until(`document.querySelector(${JSON.stringify(selector)}).scrollTop>0`);
     stage = label + ' End scrolling'; await key('End');
     await until(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});return Math.abs(e.scrollHeight-e.clientHeight-e.scrollTop)<2;})()`);
+    stage = label + ' final glyph visibility';
+    assert.equal(await evaluate(`(() => {
+      const e=document.querySelector(${JSON.stringify(selector)});
+      const walker=document.createTreeWalker(e,NodeFilter.SHOW_TEXT),texts=[];
+      let node;while(node=walker.nextNode())if(node.nodeValue.trim())texts.push(node);
+      const text=texts.at(-1),index=text.nodeValue.trimEnd().length-1;
+      const range=document.createRange();range.setStart(text,index);range.setEnd(text,index+1);
+      const r=range.getBoundingClientRect(),x=(r.left+r.right)/2,y=(r.top+r.bottom)/2;
+      const painted=document.elementFromPoint(x,y);
+      return r.width>0&&r.height>0&&r.left>=0&&r.top>=0&&r.right<=innerWidth&&r.bottom<=innerHeight&&
+        Boolean(painted&&(painted===e||e.contains(painted)));
+    })()`), true, 'The final preview glyph must be visible above any actions');
     stage = label + ' inert Enter'; await key('Enter'); assert.equal(await evaluate('fixture.counts.claims'), 0);
     if (selector === '.block-preview') {
       stage = label + ' horizontal scrolling';
@@ -269,9 +281,9 @@ queue=[request()];createRoot(document.querySelector('#app-container')).render(<P
       await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
       assert.equal(await evaluate('document.body.getBoundingClientRect().width<=innerWidth'), true);
       assert.equal(await evaluate("document.querySelector('.approval-origin').textContent"), origin);
-      const geometry = await evaluate(`(()=>{const screen=document.querySelector('.approval-screen'),actions=document.querySelector('.action-row'),origin=document.querySelector('.approval-origin');const r=actions.getBoundingClientRect(),o=origin.getBoundingClientRect();return {actionsVisible:r.left>=0&&r.right<=innerWidth+1&&r.top>=0&&r.bottom<=innerHeight+1,originFits:o.left>=0&&o.right<=innerWidth+1,detailsFit:[...document.querySelectorAll('.confirm-details dd,.contract-arguments dd')].every(e=>e.getBoundingClientRect().right<=innerWidth+1),screenWidth:screen.scrollWidth<=screen.clientWidth+1};})()`);
+      const geometry = await evaluate(`(()=>{const screen=document.querySelector('.approval-screen'),origin=document.querySelector('.approval-origin');const o=origin.getBoundingClientRect();return {originFits:o.left>=0&&o.right<=innerWidth+1,detailsFit:[...document.querySelectorAll('.confirm-details dd,.contract-arguments dd')].every(e=>e.getBoundingClientRect().right<=innerWidth+1),screenWidth:screen.scrollWidth<=screen.clientWidth+1};})()`);
       if (Object.values(geometry).some(value => !value)) console.error(JSON.stringify({ viewport: [width, height], ...geometry }));
-      assert.deepEqual(geometry, { actionsVisible: true, originFits: true, detailsFit: true, screenWidth: true });
+      assert.deepEqual(geometry, { originFits: true, detailsFit: true, screenWidth: true });
       stage = 'keyboard scroll ' + type + ' at ' + width + 'x' + height;
       await evaluate("document.querySelector('.approval-screen').focus()"); await key('End');
       try { await until("(()=>{const e=document.querySelector('.approval-screen');return e.scrollTop>0&&Math.abs(e.scrollHeight-e.clientHeight-e.scrollTop)<2;})()"); }
@@ -279,6 +291,8 @@ queue=[request()];createRoot(document.querySelector('#app-container')).render(<P
         console.error(JSON.stringify(await evaluate("(()=>{const e=document.querySelector('.approval-screen');return {scrollTop:e.scrollTop,scrollHeight:e.scrollHeight,clientHeight:e.clientHeight,reviewFocused:document.activeElement===e};})()")));
         throw error;
       }
+      stage = 'actions after keyboard review scroll ' + type + ' at ' + width + 'x' + height;
+      assert.equal(await evaluate("(()=>{const r=document.querySelector('.action-row').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth+1&&r.top>=0&&r.bottom<=innerHeight+1;})()"), true);
       stage = 'final detail visibility ' + type + ' at ' + width + 'x' + height;
       assert.equal(await evaluate("(()=>{const details=[...document.querySelectorAll('.confirm-details dd,.contract-arguments dd')];return details.at(-1).getBoundingClientRect().bottom<=document.querySelector('.action-row').getBoundingClientRect().top+1;})()"), true);
       await evaluate("document.querySelector('.approval-screen').scrollTop=0");
@@ -298,7 +312,7 @@ queue=[request()];createRoot(document.querySelector('#app-container')).render(<P
     noApprovalOnReviewEnter: true, labelledReviewInAccessibilityTree: true, disabledApprovalSafe: true,
     explicitPreviewTabStopsAndNames: true, nativeMessageAndRawPreviewScrolling: true, readonlyPreviewTextAndBoundsPreserved: true,
     sameRequestNestedScrollPreserved: true, replacementNestedScrollReset: true,
-    fourRequestTypesAtNarrowViewports: true, fullOriginAndLongDetailsFit: true, actionsVisible: true, keyboardScrollReachesFinalDetails: true,
+    fourRequestTypesAtNarrowViewports: true, fullOriginAndLongDetailsFit: true, actionsVisibleAfterKeyboardReviewScroll: true, keyboardScrollReachesFinalDetails: true, finalPreviewGlyphUnobscured: true,
     standardPopupDimensionsPreserved: true, nativeRejectionCallbackOnce: true, runtimeErrors };
 })().catch(() => { console.error('Approval focus checks failed during ' + stage + '.'); process.exitCode = 1; }).finally(async () => {
   try { await cleanup(); } catch { console.error('Approval focus fixture cleanup failed.'); process.exitCode = 1; result = null; }
