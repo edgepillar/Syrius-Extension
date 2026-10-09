@@ -64,12 +64,12 @@ const fixture = (section = 'Content') => {
     fakeActivation: () => emit(documentHandlers, 'prerenderingchange'),
     hide: () => emit(pageHandlers, 'pagehide', { persisted: true }),
     show: () => emit(pageHandlers, 'pageshow', { persisted: true }),
-    rewrite: () => {
+    rewrite: (notify = true, reinsert = false) => {
       const old = document.documentElement; pageHandlers.clear(); documentHandlers.clear();
-      document.documentElement = { nodeType: 1 };
+      if (!reinsert) document.documentElement = { nodeType: 1 };
       for (const observer of observers) {
         observer.records.push({ target: document, removedNodes: [old] });
-        observer.callback(observer.takeRecords());
+        if (notify) observer.callback(observer.takeRecords());
       }
     },
     advance: (ms, fire = true) => {
@@ -131,6 +131,36 @@ const message = (id, method = 'znn_accounts', params = {}) => ({ target: 'znn-co
   }
   // The actual public provider uses the same admission cap and JSON limits,
   // one callback, finite budgets and page-lifetime retirement.
+  {
+    const f = fixture('Inpage'), nested = [];
+    const outer = f.window.zenon.request({ method: 'znn_accounts', params: { get value() {
+      for (let i = 0; i < f.limits.activeHandlers; i++) nested.push(f.window.zenon.getAccounts());
+      return 'inert';
+    } } });
+    const rejected = assert.rejects(outer, error => error.code === -32005);
+    assert.equal(f.timers.size, f.limits.activeHandlers); assert.equal(f.listeners(), 1); assert.equal(f.posted.length, 0);
+    await rejected;
+    const retired = Promise.all(nested.map(promise => assert.rejects(promise, error => error.code === 4900)));
+    f.hide(); await retired;
+    assert.equal(f.timers.size, 0); assert.equal(f.listeners(), 0);
+  }
+  for (const reset of ['hide', 'rewrite', 'queued-rewrite', 'queued-reinsert', 'return']) {
+    const f = fixture('Inpage');
+    const outer = f.window.zenon.request({ method: 'znn_accounts', params: { get value() {
+      if (reset === 'return') { f.hide(); f.show(); }
+      else if (reset.startsWith('queued-')) f.rewrite(false, reset === 'queued-reinsert');
+      else f[reset]();
+      return 'inert';
+    } } });
+    const rejected = assert.rejects(outer, error => error.code === 4900);
+    assert.equal(f.timers.size, 0); assert.equal(f.listeners(), 0); assert.equal(f.posted.length, 0);
+    await rejected;
+    if (reset === 'hide') f.show();
+    const fresh = f.window.zenon.getAccounts(); f.activate();
+    assert.equal(f.posted.length, 1);
+    f.page({ target: 'znn-inpage', kind: 'response', id: f.posted[0].id, result: [] });
+    assert.deepEqual(await fresh, []);
+  }
   {
     const f = fixture('Inpage');
     const crossRealm = vm.runInNewContext('({ nested: { amount: "1" }, list: [{ value: "inert" }] })');

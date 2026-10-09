@@ -30,6 +30,7 @@ import { limits, validateEnvelope, busy } from '../../services/utils/approvalLim
   const listeners = new Map();
   let requestCounter = 0;
   let active = Boolean(document.documentElement);
+  let lifetimeGeneration = 0;
   let watchingActivation = false;
   const stopWatchingActivation = () => {
     if (!watchingActivation) return;
@@ -82,6 +83,7 @@ import { limits, validateEnvelope, busy } from '../../services/utils/approvalLim
     new Promise((resolve, reject) => {
       lifetime.check();
       if (!active) { reject({ code: 4900, message: 'This document is no longer active. Make a new request after returning.' }); return; }
+      const admittedGeneration = lifetimeGeneration;
       if (pending.size >= limits.activeHandlers) { reject({ code: busy().code, message: busy().message }); return; }
       const id = nextId();
       // postMessage normalized cross-realm objects and data-only class instances
@@ -97,6 +99,14 @@ import { limits, validateEnvelope, busy } from '../../services/utils/approvalLim
       const needsApproval = method !== 'znn_accounts' && method !== 'znn_chainId' && method !== 'znn_nodeUrl';
       const timeout = needsApproval ? limits.ttl + 60000 : transportTimeoutMs;
       const waiting = { ...envelope, resolve, reject, needsApproval, deferred: Boolean(document.prerendering), deadline: Date.now() + timeout };
+      // Structured cloning invokes enumerable getters. They may request more
+      // work or retire/rewrite this document before the copied data returns.
+      lifetime.check();
+      if (!active || lifetimeGeneration !== admittedGeneration) {
+        reject({ code: 4900, message: 'This document is no longer active. Make a new request after returning.' });
+        return;
+      }
+      if (pending.size >= limits.activeHandlers) { reject({ code: busy().code, message: busy().message }); return; }
       pending.set(id, waiting);
       // Include activation waiting in the existing transport budget. Neither
       // realm posts a privileged request while the native document prerenders.
@@ -248,6 +258,7 @@ import { limits, validateEnvelope, busy } from '../../services/utils/approvalLim
   // Reject actual provider promises synchronously when leaving. A posted
   // cancellation message could itself wait in the BFCache task queue.
   const leave = () => {
+    lifetimeGeneration += 1;
     active = false;
     for (const waiting of pending.values()) {
       clearTimeout(waiting.timer);
