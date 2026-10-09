@@ -15,6 +15,12 @@ alternate release path. The workflow verifies that the tag matches the manifest
 version before building. A successful master run alone does not publish an
 update.
 
+Both release paths refuse an existing release for the version tag. Rerunning a
+tag workflow cannot replace an already published ZIP or checksum; publish a
+new version for different bytes. The publication regression runs the actual
+workflow shell with an inert GitHub boundary. It does not create a release or
+establish repository-enforced tag or release immutability.
+
 The workflow artifact is the extension ZIP itself; it is uploaded with
 `archive: false` so GitHub does not wrap it in another ZIP. The checksum is
 recreated for the GitHub Release using the ZIP basename and published alongside

@@ -110,6 +110,9 @@ jobs:
           GO_ZENON_ABI_DIR: .test-fixtures/go-zenon/vm/embedded/definition
         run: node --test utils/validation-gates-test.js
 
+      - name: Check release publication failure paths
+        run: node --test utils/release-assets-test.js
+
       - name: Run dependency security regression tests
         run: npm run test:security
 
@@ -214,12 +217,12 @@ jobs:
             exit 1
           fi
 
-          if [[ "$AUTO_RELEASE" == "true" ]]; then
-            if gh release view "$TAG_NAME" >/dev/null 2>&1; then
-              echo "::error::Release $TAG_NAME already exists. Increase the project version before publishing another release."
-              exit 1
-            fi
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            echo "::error::Release $TAG_NAME already exists. Increase the project version before publishing another release."
+            exit 1
+          fi
 
+          if [[ "$AUTO_RELEASE" == "true" ]]; then
             gh release create "$TAG_NAME" "${assets[@]}" \
               --target "$TARGET_SHA" \
               --title "Syrius Extension ${TAG_NAME#v}" \
@@ -227,11 +230,7 @@ jobs:
             exit 0
           fi
 
-          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
-            gh release upload "$TAG_NAME" "${assets[@]}" --clobber
-          else
-            gh release create "$TAG_NAME" "${assets[@]}" \
-              --title "Syrius Extension ${TAG_NAME#v}" \
-              --generate-notes \
-              --verify-tag
-          fi
+          gh release create "$TAG_NAME" "${assets[@]}" \
+            --title "Syrius Extension ${TAG_NAME#v}" \
+            --generate-notes \
+            --verify-tag
