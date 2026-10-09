@@ -20,6 +20,8 @@ tag workflow cannot replace an already published ZIP or checksum; publish a
 new version for different bytes. The publication regression runs the actual
 workflow shell with an inert GitHub boundary. It does not create a release or
 establish repository-enforced tag or release immutability.
+See `RELEASE-CHECKLIST.md` at the repository root for the proposed final-candidate,
+browser, distribution and maintainer-owned acceptance gates.
 
 The workflow artifact is the extension ZIP itself; it is uploaded with
 `archive: false` so GitHub does not wrap it in another ZIP. The checksum is
