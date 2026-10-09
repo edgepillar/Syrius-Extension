@@ -112,7 +112,11 @@ const SiteIntegrationLayout = () => {
   const focusReview = useCallback((element) => {
     if (!element || !reviewIdentity) return;
     element.scrollTop = 0;
-    element.querySelectorAll('.approval-body').forEach(body => { body.scrollTop = 0; });
+    element.scrollLeft = 0;
+    element.querySelectorAll('.approval-body, .message-preview, .block-preview').forEach(body => {
+      body.scrollTop = 0;
+      body.scrollLeft = 0;
+    });
     element.focus();
   }, [reviewIdentity]);
   const rendered = useRef(null), operation = useRef(null), discarded = useRef(null), mounted = useRef(true), previewOwner = useRef(null);
@@ -535,7 +539,7 @@ const SiteIntegrationLayout = () => {
 
             {/* Verbatim, wrapped, and never interpreted: the point of this
                 panel is that what gets signed is what is on screen. */}
-            <pre className="message-preview">{request.params.message}</pre>
+            <pre className="message-preview" tabIndex={0} role="region" aria-label="Message to sign">{request.params.message}</pre>
 
             <dl className="confirm-details">
               <dt>Signing as</dt>
@@ -651,7 +655,7 @@ const SiteIntegrationLayout = () => {
             {preparedBlock && (
               <details className="block-preview-details">
                 <summary>Raw transaction data</summary>
-                <pre className="block-preview">
+                <pre className="block-preview" tabIndex={0} role="region" aria-label="Raw transaction data">
                   {JSON.stringify(preparedBlock, null, 2)}
                 </pre>
               </details>

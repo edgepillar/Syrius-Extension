@@ -8,4 +8,8 @@ Native checks cover initial review focus, same-type replacement through the actu
 
 For a negative control, run the same fixture in an otherwise identical checkout containing the baseline approval screen and stylesheet with `--expect-baseline`. It verifies retained authorization-button focus after replacement and fixed-width clipping. The fixture does not modify source files.
 
+The message and raw-data previews have explicit Tab stops and region names. The fixture checks native Tab navigation, Arrow/End scrolling inside each bounded preview, the native raw-data disclosure, and unchanged read-only text. Same-request updates retain nested scroll positions; new requests return both preview axes to the beginning. For the preceding source without this preview follow-up, use `--expect-preview-baseline` to verify missing explicit Tab stops/names and retained message scroll after replacement. Current Chrome automatically focuses the older preview markup; that baseline does not simulate an older browser.
+
+Chrome's [keyboard-focusable scrollers documentation](https://developer.chrome.com/blog/keyboard-focusable-scrollers) places automatic scroll-container focus in Chrome 132. Explicit Tab stops avoid depending on that newer behavior for the declared Chrome 112 minimum; minimum-version runtime qualification is still separate.
+
 This is an isolated extension-page test, not a real wallet or native approval-window lifecycle qualification. Reduced viewport dimensions approximate the layout space available under zoom; actual browser/OS zoom, screen-reader speech and navigation, assistive devices, and minimum supported browsers require separate qualification. Package scripts, dependency identities and target workflows are unchanged.

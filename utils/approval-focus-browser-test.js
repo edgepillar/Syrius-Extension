@@ -67,7 +67,7 @@ const replace=(type,label,ttl)=>{const next=request(type,label,ttl);queue=[next]
 window.fixture={binding,counts,replace,request,queueOnly:next=>{queue=[next];},bump:()=>{state={...state,wallet:{...state.wallet,revision:Math.random()}};listeners.forEach(fn=>fn());},
  temporarilyEmpty:()=>{const saved=queue;queue=[];for(const fn of storageListeners)fn({'znn.pendingRequests':{newValue:{}}},'session');setTimeout(()=>{queue=saved;},100);},
  internal:async method=>{if(method==='approvals.next')return queue[0]||null;if(method==='approvals.claim'){counts.claims++;return null;}if(method==='approvals.reject'){counts.rejections++;return true;}throw Error('Unexpected inert boundary');},
- prepare:params=>preparation||Promise.resolve({block:params,nodeUrl:state.connectionParameters.nodeUrl}),holdPreparation:()=>{preparation=new Promise(()=>{});},releasePreparation:()=>{preparation=null;},
+ prepare:params=>preparation||Promise.resolve({block:{...params,syntheticRows:Array.from({length:40},()=> 'Inert raw detail '.repeat(40))},nodeUrl:state.connectionParameters.nodeUrl}),holdPreparation:()=>{preparation=new Promise(()=>{});},releasePreparation:()=>{preparation=null;},
  longRequest:type=>{const next=request(type,'Long'+type);next.origin='https://'+['a'.repeat(60),'b'.repeat(60),'c'.repeat(60),'fixture','invalid'].join('.')+':8443';queue=[next];for(const fn of storageListeners)fn({'znn.pendingRequests':{newValue:{[next.id]:next}}},'session');return next.origin;}};
 Object.defineProperty(chrome,'storage',{value:{onChanged:{addListener:fn=>storageListeners.add(fn),removeListener:fn=>storageListeners.delete(fn)}}});
 Object.defineProperty(chrome,'windows',{value:{getCurrent:async()=>({id:1})}});
@@ -123,7 +123,9 @@ queue=[request()];createRoot(document.querySelector('#app-container')).render(<P
     throw Error('Expected state did not appear');
   };
   const key = async value => {
-    const code = { Tab: 9, Enter: 13, End: 35 }[value];
+    // Native keyboard scrolling uses the committed layout, not just DOM state.
+    await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+    const code = { Tab: 9, Enter: 13, End: 35, ArrowDown: 40, ArrowRight: 39 }[value];
     await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: value, code: value, windowsVirtualKeyCode: code,
       ...(value === 'Enter' ? { text: '\r', unmodifiedText: '\r' } : {}) }, sessionId);
     await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: value, code: value, windowsVirtualKeyCode: code }, sessionId);
@@ -134,8 +136,64 @@ queue=[request()];createRoot(document.querySelector('#app-container')).render(<P
     await evaluate(`fixture.replace(${JSON.stringify(type)},${JSON.stringify(label)},${JSON.stringify(ttl)})`);
     await until(`document.querySelector('.site-title')?.textContent===${JSON.stringify(label)}`);
   };
+  const preview = async (selector, label) => {
+    stage = label + ' Tab access';
+    const before = await evaluate(`document.querySelector(${JSON.stringify(selector)}).textContent`);
+    await key('Tab');
+    assert.equal(await evaluate(`document.activeElement.matches(${JSON.stringify(selector)})`), true);
+    assert.equal(await evaluate(`document.activeElement.getAttribute('tabindex')`), '0');
+    assert.equal(await evaluate(`document.activeElement.getAttribute('aria-label')`), label);
+    await cdp('DOM.enable', {}, sessionId);
+    const { root: documentRoot } = await cdp('DOM.getDocument', {}, sessionId);
+    const { nodeId } = await cdp('DOM.querySelector', { nodeId: documentRoot.nodeId, selector }, sessionId);
+    const { nodes } = await cdp('Accessibility.getPartialAXTree', { nodeId, fetchRelatives: false }, sessionId);
+    assert(nodes.some(node => node.role?.value === 'region' && node.name?.value === label));
+    stage = label + ' ArrowDown scrolling';
+    await key('ArrowDown');
+    await until(`document.querySelector(${JSON.stringify(selector)}).scrollTop>0`);
+    stage = label + ' End scrolling'; await key('End');
+    await until(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});return Math.abs(e.scrollHeight-e.clientHeight-e.scrollTop)<2;})()`);
+    stage = label + ' inert Enter'; await key('Enter'); assert.equal(await evaluate('fixture.counts.claims'), 0);
+    if (selector === '.block-preview') {
+      stage = label + ' horizontal scrolling';
+      await key('ArrowRight'); await until("document.querySelector('.block-preview').scrollLeft>0");
+    }
+    stage = label + ' text and bounds';
+    assert.equal(await evaluate(`document.querySelector(${JSON.stringify(selector)}).textContent`), before);
+    assert.equal(await evaluate(`getComputedStyle(document.querySelector(${JSON.stringify(selector)})).maxHeight`), selector === '.message-preview' ? '200px' : '210px');
+    await pause(250);
+  };
+  const previewPosition = selector => evaluate(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});return [e.scrollTop,e.scrollLeft];})()`);
+  const preservePreviewPosition = async selector => {
+    const position = await previewPosition(selector); assert(position[0] > 0);
+    if (selector === '.block-preview') assert(position[1] > 0);
+    await evaluate('fixture.bump()'); await pause(50);
+    assert.deepEqual(await previewPosition(selector), position);
+  };
   stage = 'request focus';
   await until("document.querySelector('.action-row button:last-child')?.textContent==='Sign'");
+  if (process.argv.includes('--expect-preview-baseline')) {
+    stage = 'prior preview semantics and scroll ownership';
+    await evaluate("document.querySelector('.approval-screen').focus()");
+    assert.equal(await evaluate("document.querySelector('.message-preview').hasAttribute('tabindex')"), false);
+    assert.equal(await evaluate("document.querySelector('.message-preview').getAttribute('aria-label')"), null);
+    // Current Chrome auto-focuses this scroller; this is not an old-browser run.
+    await key('Tab'); assert.equal(await evaluate("document.activeElement.matches('.message-preview')"), true);
+    await key('End'); await until("document.querySelector('.message-preview').scrollTop>0"); await pause(250);
+    await replace('signMessage', 'BaselineReplacement');
+    assert.equal(await evaluate("document.querySelector('.message-preview').scrollTop>0"), true);
+    await replace('signAndSendBlock', 'BaselineRaw');
+    await until("Boolean(document.querySelector('.block-preview'))");
+    await evaluate("document.querySelector('.approval-screen').focus()"); await key('Tab');
+    assert.equal(await evaluate('document.activeElement.tagName'), 'SUMMARY');
+    await key('Enter'); await until("document.querySelector('details').open");
+    assert.equal(await evaluate("document.querySelector('.block-preview').hasAttribute('tabindex')"), false);
+    assert.equal(await evaluate("document.querySelector('.block-preview').getAttribute('aria-label')"), null);
+    await key('Tab'); assert.equal(await evaluate("document.activeElement.matches('.block-preview')"), true);
+    result = { baseline: true, node: process.version, browser: version.Browser,
+      previewsLackExplicitTabStopsAndNames: true, automaticPreviewFocusInCurrentBrowser: true, replacementRetainsMessageScroll: true };
+    return;
+  }
   if (process.argv.includes('--expect-baseline')) {
     await focusConfirm(); await replace('signMessage', 'Replacement');
     assert.equal(await evaluate("document.activeElement===document.querySelector('.action-row button:last-child')"), true);
@@ -175,6 +233,29 @@ queue=[request()];createRoot(document.querySelector('#app-container')).render(<P
   assert.equal(await evaluate("document.querySelector('.action-row button:last-child').disabled"), true);
   await key('Enter'); assert.equal(await evaluate('fixture.counts.claims'), 0);
   await evaluate('fixture.releasePreparation()');
+  stage = 'message preview keyboard access';
+  await replace('signMessage', 'MessagePreview');
+  await preview('.message-preview', 'Message to sign');
+  stage = 'message preview position ownership';
+  await preservePreviewPosition('.message-preview');
+  await replace('signMessage', 'ReplacedMessage');
+  assert.equal(await onReview(), true);
+  assert.deepEqual(await previewPosition('.message-preview'), [0, 0]);
+  assert.equal(await evaluate("document.querySelector('.message-preview').textContent.startsWith('Inert message ReplacedMessage')"), true);
+  stage = 'raw preview keyboard access';
+  await replace('signAndSendBlock', 'RawPreview');
+  await until("Boolean(document.querySelector('.block-preview'))");
+  await key('Tab'); assert.equal(await evaluate('document.activeElement.tagName'), 'SUMMARY');
+  await key('Enter'); await until("document.querySelector('details').open");
+  await preview('.block-preview', 'Raw transaction data');
+  stage = 'raw preview position ownership';
+  await preservePreviewPosition('.block-preview');
+  await replace('signAndSendBlock', 'ReplacedRaw');
+  await until("Boolean(document.querySelector('.block-preview'))");
+  assert.equal(await onReview(), true);
+  await key('Tab'); assert.equal(await evaluate('document.activeElement.tagName'), 'SUMMARY');
+  await key('Enter'); await until("document.querySelector('details').open");
+  assert.deepEqual(await previewPosition('.block-preview'), [0, 0]);
   for (const type of ['connect', 'sendTransaction', 'signMessage', 'signAndSendBlock']) {
     stage = 'layout ' + type;
     await viewport(360, 400);
@@ -215,6 +296,8 @@ queue=[request()];createRoot(document.querySelector('#app-container')).render(<P
   result = { baseline: false, node: process.version, browser: version.Browser, actualApprovalScreenAndPresentation: true,
     storageReplacementFocusReset: true, naturalExpiryFocusReset: true, sameRequestFocusPreserved: true, reappearingRequestFocusReset: true,
     noApprovalOnReviewEnter: true, labelledReviewInAccessibilityTree: true, disabledApprovalSafe: true,
+    explicitPreviewTabStopsAndNames: true, nativeMessageAndRawPreviewScrolling: true, readonlyPreviewTextAndBoundsPreserved: true,
+    sameRequestNestedScrollPreserved: true, replacementNestedScrollReset: true,
     fourRequestTypesAtNarrowViewports: true, fullOriginAndLongDetailsFit: true, actionsVisible: true, keyboardScrollReachesFinalDetails: true,
     standardPopupDimensionsPreserved: true, nativeRejectionCallbackOnce: true, runtimeErrors };
 })().catch(() => { console.error('Approval focus checks failed during ' + stage + '.'); process.exitCode = 1; }).finally(async () => {
