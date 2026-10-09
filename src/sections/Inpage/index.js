@@ -1,4 +1,5 @@
 import observeDocumentLifetime from '../../services/utils/documentLifetime';
+import { limits, validateEnvelope, busy } from '../../services/utils/approvalLimits';
 
 // The wallet as a page sees it: `window.zenon`.
 //
@@ -29,6 +30,44 @@ import observeDocumentLifetime from '../../services/utils/documentLifetime';
   const listeners = new Map();
   let requestCounter = 0;
   let active = Boolean(document.documentElement);
+  let watchingActivation = false;
+  const stopWatchingActivation = () => {
+    if (!watchingActivation) return;
+    document.removeEventListener('prerenderingchange', activate);
+    watchingActivation = false;
+  };
+  const activate = () => {
+    lifetime.check();
+    if (!active || document.prerendering) return;
+    stopWatchingActivation();
+    for (const [id, waiting] of pending) if (waiting.deferred) send(id);
+  };
+  const watchActivation = () => {
+    if (watchingActivation) return;
+    document.addEventListener('prerenderingchange', activate);
+    watchingActivation = true;
+  };
+  const retire = id => {
+    const waiting = pending.get(id);
+    if (!waiting) return null;
+    pending.delete(id);
+    clearTimeout(waiting.timer);
+    if (![...pending.values()].some(entry => entry.deferred)) stopWatchingActivation();
+    return waiting;
+  };
+  const expire = id => {
+    const waiting = retire(id);
+    if (waiting) waiting.reject({ code: 4900, message: waiting.deferred
+      ? 'The prerendered page was not activated in time. Make a new request after opening it.'
+      : waiting.needsApproval ? 'The wallet did not finish. Verify the outcome before retrying.' : 'The wallet did not respond' });
+  };
+  const send = id => {
+    const waiting = pending.get(id);
+    if (!active || !waiting || document.prerendering) return;
+    if (Date.now() >= waiting.deadline) { expire(id); return; }
+    waiting.deferred = false;
+    window.postMessage({ target: outboundTarget, kind: 'request', id, method: waiting.method, params: waiting.params }, window.location.origin);
+  };
 
   const nextId = () => {
     requestCounter += 1;
@@ -43,27 +82,18 @@ import observeDocumentLifetime from '../../services/utils/documentLifetime';
     new Promise((resolve, reject) => {
       lifetime.check();
       if (!active) { reject({ code: 4900, message: 'This document is no longer active. Make a new request after returning.' }); return; }
-      if (pending.size >= 32) { reject({ code: -32005, message: 'Too many wallet requests. Wait and retry.' }); return; }
       const id = nextId();
+      validateEnvelope({ id, method, params });
+      if (pending.size >= limits.activeHandlers) { reject({ code: busy().code, message: busy().message }); return; }
       const needsApproval = method !== 'znn_accounts' && method !== 'znn_chainId' && method !== 'znn_nodeUrl';
-
-      pending.set(id, { resolve, reject, timer: null });
-
-      // A prerendered page's request waits for the page to be shown: the relay
-      // holds it until then (Content/index.js), so its clock starts then too,
-      // rather than running out while nobody has opened the page yet.
-      const send = () => {
-        const waiting = pending.get(id);
-        if (!waiting) return;
-        if (document.prerendering) { document.addEventListener('prerenderingchange', send, { once: true }); return; }
-        waiting.timer = setTimeout(() => {
-          pending.delete(id);
-          reject({ code: 4900, message: needsApproval
-            ? 'The wallet did not finish. Verify the outcome before retrying.' : 'The wallet did not respond' });
-        }, needsApproval ? 31 * 60 * 1000 : transportTimeoutMs);
-        window.postMessage({ target: outboundTarget, kind: 'request', id, method, params }, window.location.origin);
-      };
-      send();
+      const timeout = needsApproval ? limits.ttl + 60000 : transportTimeoutMs;
+      const waiting = { resolve, reject, method, params, needsApproval, deferred: Boolean(document.prerendering), deadline: Date.now() + timeout };
+      pending.set(id, waiting);
+      // Include activation waiting in the existing transport budget. Neither
+      // realm posts a privileged request while the native document prerenders.
+      waiting.timer = setTimeout(() => expire(id), timeout);
+      if (waiting.deferred) watchActivation();
+      else send(id);
     });
 
   const emit = (event, data) => {
@@ -96,14 +126,10 @@ import observeDocumentLifetime from '../../services/utils/documentLifetime';
     }
 
     if (message.kind === 'response') {
-      const waiting = pending.get(message.id);
+      const waiting = retire(message.id);
 
       if (!waiting) {
         return;
-      }
-      pending.delete(message.id);
-      if (waiting.timer) {
-        clearTimeout(waiting.timer);
       }
       if (!message.error && Number.isFinite(message.expiresAt) && (!Number.isFinite(message.acceptedAt) || message.acceptedAt >= message.expiresAt)) {
         waiting.reject({ code: -32603, message: 'Approval expired. Verify the outcome before retrying.' });
@@ -219,6 +245,7 @@ import observeDocumentLifetime from '../../services/utils/documentLifetime';
       waiting.reject({ code: 4900, message: 'The page left before this request completed. Make a new request after returning.' });
     }
     pending.clear();
+    stopWatchingActivation();
     provider.accounts = [];
     provider.chainId = null;
   };
