@@ -51,12 +51,13 @@ window.fixture={counts,hasTransactionNetwork:${hasTransactionNetwork}};
 const Fixture=()=>{
   const model=useModal();
   const close=useCallback(()=>{counts.closed++;model.closeModal();},[model.closeModal]);
-  const alert=(title,transaction=false)=><AlertModal title={title} transaction={transaction} onDismiss={()=>counts.dismissed++} onSuccess={()=>counts.confirmed++}><p>Review this synthetic action before choosing.</p></AlertModal>;
+  const alert=(title,transaction=false,long=false)=><AlertModal title={title} transaction={transaction} onDismiss={()=>counts.dismissed++} onSuccess={()=>counts.confirmed++}>{long?Array.from({length:12},(_,i)=><p key={i}>{'Review this synthetic action before choosing. '.repeat(8)}</p>):<p>Review this synthetic action before choosing.</p>}</AlertModal>;
   const show=(kind='alert',title='Confirm this synthetic action')=>{
     if(kind==='generic')model.openModal(<div>Read this synthetic message.</div>);
     else if(kind==='single')model.openModal(<div title={title}><button id="single-action" onClick={()=>counts.confirmed++}>Confirm</button></div>);
     else if(kind==='disabled')model.openModal(<div title={title}><button disabled>Disabled</button><button hidden>Hidden</button><fieldset disabled><button>Disabled by fieldset</button></fieldset><span inert=""><button>Inert</button></span><button style={{visibility:'hidden'}}>Invisible</button></div>);
     else if(kind==='transaction')model.openModal(alert(title,true));
+    else if(kind==='long')model.openModal(alert(title,false,true));
     else model.openModal(alert(title));
   };
   Object.assign(window.fixture,{show,replace:()=>model.openModal(alert('Replacement synthetic action'))});
@@ -145,6 +146,15 @@ const watchdog = setTimeout(() => {
   const closed = async () => { await until("!document.querySelector('[role=dialog]')"); assert.equal(await active(), 'trigger'); };
   const counts = () => evaluate('fixture.counts');
   await until("typeof window.fixture?.show === 'function'");
+  if (process.argv.includes('--expect-scroll-baseline')) {
+    await cdp('Emulation.setDeviceMetricsOverride', { width: 320, height: 184, deviceScaleFactor: 1, mobile: false }, sessionId);
+    await show('long', 'Long synthetic review');
+    assert.equal(await evaluate("(()=>{const r=document.querySelector('[role=dialog]').getBoundingClientRect();return r.top<0&&r.bottom>innerHeight;})()"), true);
+    assert.equal(await evaluate("document.querySelector('.modal-content').scrollHeight===document.querySelector('.modal-content').clientHeight"), true);
+    finished = { scrollBaseline: true, node: process.version, browser: version.Browser,
+      emulatedViewport: true, dialogExtendsBeyondViewport: true, longBodyHasNoScrollContainment: true };
+    return;
+  }
   await evaluate("document.querySelector('#trigger').focus()");
   await key('Enter');
   await until("Boolean(document.querySelector('[role=dialog]'))");
@@ -215,6 +225,26 @@ const watchdog = setTimeout(() => {
     await key('Tab'); await key('Tab'); await key('Tab'); assert.equal(await active(), 'close-modal');
     await key('Escape'); await closed();
   }
+  const visibleControl = selector => evaluate(`(()=>{const el=document.querySelector(${JSON.stringify(selector)}),r=el.getBoundingClientRect();return r.width>0&&r.height>0&&r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight;})()`);
+  for (const [width, height] of [[360, 400], [320, 184]]) {
+    await cdp('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false }, sessionId);
+    const before = await counts();
+    await show('long', 'Long synthetic review');
+    assert.equal(await evaluate("(()=>{const r=document.querySelector('[role=dialog]').getBoundingClientRect();return r.top>=11&&r.bottom<=innerHeight-11;})()"), true);
+    assert.equal(await active(), 'close-modal'); assert.equal(await visibleControl('.close-modal'), true);
+    assert.equal(await evaluate("(()=>{const el=document.querySelector('.modal-content');return el.scrollHeight>el.clientHeight&&getComputedStyle(el).overflowY==='auto';})()"), true);
+    await key('Tab', true);
+    assert.equal(await evaluate("document.activeElement===document.querySelector('.modal-action-area button:last-child')"), true);
+    assert.equal(await visibleControl('.modal-action-area button:last-child'), true);
+    assert.equal(await evaluate("document.querySelector('.modal-content').scrollTop>0"), true);
+    await key('Tab'); assert.equal(await active(), 'close-modal');
+    assert.equal(await visibleControl('.close-modal'), true);
+    await key('Tab'); assert.equal(await evaluate('document.activeElement.textContent.trim()'), 'Cancel');
+    assert.equal(await visibleControl('.modal-action-area button'), true);
+    await key('Escape'); await closed();
+    assert.deepEqual(await counts(), { ...before, closed: before.closed + 1 });
+  }
+  await cdp('Emulation.setDeviceMetricsOverride', { width: 360, height: 400, deviceScaleFactor: 1, mobile: false }, sessionId);
   await show(); await evaluate("document.querySelector('#trigger').remove()"); await key('Escape');
   await until("!document.querySelector('[role=dialog]')");
   assert.equal(await evaluate('document.activeElement.tagName'), 'BODY');
@@ -228,7 +258,9 @@ const watchdog = setTimeout(() => {
     escapeAndBackdropPreserveCloseOnlySemantics: true, closeCancelConfirmCallbacksOnce: true,
     originalTriggerRestoredAfterContentReplacement: true, noFocusableAndDisabledContentContained: true,
     initialEnterDoesNotConfirmSingleAction: true, detachedTriggerHandled: true, unmountRestoresConnectedTrigger: true,
-    simpleDialogFits360x400: true, transactionDisplayFromCurrentSource: hasTransactionNetwork, runtimeErrors };
+    simpleDialogFits360x400: true, longDialogsContainedAt360x400And320x184: true,
+    closeRemainsVisibleWhileBodyScrolls: true, nativeTabScrollsFocusedCancelAndConfirmIntoView: true,
+    emulatedViewportNotBrowserZoom: true, transactionDisplayFromCurrentSource: hasTransactionNetwork, runtimeErrors };
 })().catch(error => { console.error(error.message || 'Native modal focus checks failed.'); process.exitCode = 1; }).finally(async () => {
   if (cdp) await cdp('Browser.close').catch(() => {});
   socket?.close(); browser?.kill();

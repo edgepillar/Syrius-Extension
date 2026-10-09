@@ -79,7 +79,8 @@ const Modal = () => {
   return ReactDOM.createPortal(
     <>
       <div className="modal-backdrop" onClick={closeModal} />
-      <div className="modal-container text-white" role="dialog" aria-modal="true" aria-label={name} tabIndex={-1} ref={container}>
+      <div className="modal-container text-white" role="dialog" aria-modal="true" aria-label={name} tabIndex={-1} ref={container}
+        style={{ maxHeight: 'calc(100vh - 24px)', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
         {modalContent}
       </div>
     </>,
