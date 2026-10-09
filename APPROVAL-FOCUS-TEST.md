@@ -1,8 +1,8 @@
 # Native approval review qualification
 
-Run `node utils/approval-focus-browser-test.js` with Node 24 and a Chromium-family browser supporting the DevTools `Extensions.loadUnpacked` command. Set `CHROMIUM_PATH` to its executable when it is not the default Brave location.
+The native approval regression is registered in `npm run test:browser`. Run it alone with `node utils/approval-focus-browser-test.js`, using Node 24 and a Chromium-family browser supporting the DevTools `Extensions.loadUnpacked` command. Set `CHROMIUM_PATH` to its executable when it is not the default Brave location.
 
-The optional fixture compiles the actual approval screen, amount/network/argument presentation components, approval identity helpers and stylesheet under the product's MV3 CSP. Queue messages, storage-change events, wallet state, SDK calls, transaction preparation/decoding and signing boundaries are inert. It does not load a wallet or connect to a node. The disposable browser profile is removed before a successful result is reported.
+The native regression fixture compiles the actual approval screen, amount/network/argument presentation components, approval identity helpers and stylesheet under the product's MV3 CSP. Queue messages, storage-change events, wallet state, SDK calls, transaction preparation/decoding and signing boundaries are inert. It does not load a wallet or connect to a node. The disposable browser profile is removed before a successful result is reported.
 
 Native checks cover initial review focus, same-type replacement through the actual storage-change callback, natural expiry with a queued replacement, disappearance/reappearance, unchanged-request focus and scroll retention, accessible region naming, disabled preparation, Enter without approval from the review region, and the Reject callback. All four approval types are exercised with long origin/details at 360×400, 280×400 and 180×300 CSS-pixel viewports, including keyboard scrolling to the final details, visible actions and unchanged standard toolbar-popup dimensions.
 
@@ -12,4 +12,4 @@ The message and raw-data previews have explicit Tab stops and region names. The 
 
 Chrome's [keyboard-focusable scrollers documentation](https://developer.chrome.com/blog/keyboard-focusable-scrollers) places automatic scroll-container focus in Chrome 132. Explicit Tab stops avoid depending on that newer behavior for the declared Chrome 112 minimum; minimum-version runtime qualification is still separate.
 
-This is an isolated extension-page test, not a real wallet or native approval-window lifecycle qualification. Reduced viewport dimensions approximate the layout space available under zoom; actual browser/OS zoom, screen-reader speech and navigation, assistive devices, and minimum supported browsers require separate qualification. Package scripts, dependency identities and target workflows are unchanged.
+This is an isolated extension-page test, not a real wallet or native approval-window lifecycle qualification. Reduced viewport dimensions approximate the layout space available under zoom; actual browser/OS zoom, screen-reader speech and navigation, assistive devices, and minimum supported browsers require separate qualification. The existing browser suite gains this regression; dependency identities and target workflows are unchanged.
