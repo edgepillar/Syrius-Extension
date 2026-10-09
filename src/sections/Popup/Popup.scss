@@ -2321,6 +2321,10 @@ button:disabled {
     animation-duration: 1ms !important;
   }
 
+  .toast-successbar .Toastify--animate-icon {
+    animation: none;
+  }
+
   .Toastify__progress-bar {
     visibility: hidden;
   }
