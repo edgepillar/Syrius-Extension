@@ -66,7 +66,8 @@ const hookRuntime = () => {
 };
 const networkFixture = () => {
   const state = { nodeUrl: 'wss://node-a.invalid', chainIdentifier: 69 };
-  const zenon = { wsClient: {}, ledger: { client: {} } };
+  const client = { url: state.nodeUrl };
+  const zenon = { wsClient: client, ledger: { client } };
   const sdk = { Zenon: { getSingleton: () => zenon, getChainIdentifier: () => state.chainIdentifier },
     Enums: { PowStatus: { generating: 0, done: 1 } } };
   const override = (name) => {
@@ -98,7 +99,11 @@ const historyFixture = () => {
   });
   const useTransactions = load('src/services/hooks/useTransactions.js').default;
   const render = () => hooks.render(() => useTransactions(address, address));
-  const cleanup = (() => { render(); return hooks.effects[0].callback(); })();
+  const cleanup = (() => {
+    render();
+    const callbacks = hooks.effects.map((effect) => effect.callback()).filter((callback) => typeof callback === 'function');
+    return () => callbacks.forEach((callback) => callback());
+  })();
   return { ...network, load, hooks, render, cleanup, setAddress: (next) => { address = next; render(); }, getAddress: () => address };
 };
 const reducerFixture = (network = networkFixture()) => {

@@ -8,6 +8,7 @@ import { storeChainIdentifier } from '../../../services/redux/connectionParamete
 import { detectNodeChainId, mainnetChainId, parseChainId } from '../../../services/utils/chainId';
 import { notify } from '../../../services/utils/notify';
 import { announceChain, captureLifetime } from '../../../services/wallet/announce';
+import { retireReadContext } from '../../../services/wallet/readContext';
 
 // Node and chain settings.
 //
@@ -44,6 +45,7 @@ const ChangeNode = () => {
       notify.error('The chain identifier must be a whole number, 1 or higher.');
       return;
     }
+    retireReadContext();
     Zenon.setChainIdentifier(parsed);
     setChainId(parsed);
     setDraftChainId(String(parsed));
