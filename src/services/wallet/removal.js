@@ -21,7 +21,7 @@ const address = (value) => {
     const data = value?.core?.data;
     if (value?.hrp !== 'z' || value?.core?.type !== 'Buffer' || !Array.isArray(data) ||
       data.length !== 20 || !data.every((byte) => Number.isInteger(byte) && byte >= 0 && byte <= 255)) throw invalid();
-    return new Primitives.Address('z', Buffer.from(data)).toString();
+    return new Primitives.Address('z', new Uint8Array(data)).toString();
   } catch (error) { throw invalid(); }
 };
 const indexValid = (value) => Number.isSafeInteger(value) && value >= 0 && value < 0x80000000;
