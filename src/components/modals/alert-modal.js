@@ -32,7 +32,7 @@ const AlertModal = ({ children, title, type = 'confirm', onDismiss, onSuccess, c
     <div className="alert-modal">
       <div className="modal-header">
         <span>{title}</span>
-        <button type="button" className="close-modal" onClick={dismiss} aria-label="Close">
+        <button type="button" className="close-modal" onClick={dismiss} aria-label="Close" data-modal-dismiss>
           <img alt="" src={require('./../../assets/close-icon.svg')} width="12" />
         </button>
       </div>
@@ -44,7 +44,7 @@ const AlertModal = ({ children, title, type = 'confirm', onDismiss, onSuccess, c
         {children}
 
         <div className="modal-action-area">
-          <button type="button" className="button secondary w-100" onClick={dismiss}>
+          <button type="button" className="button secondary w-100" onClick={dismiss} data-modal-dismiss>
             Cancel
           </button>
           <button
