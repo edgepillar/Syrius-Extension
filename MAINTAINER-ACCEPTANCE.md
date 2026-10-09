@@ -2,18 +2,18 @@
 
 Status: review preparation, 9 October 2026. This document records unresolved decisions; no maintainer approval, production architecture selection, merge or release is implied.
 
-Target: `sol-znn/syrius-extension`, master `247f02517f67f60ec7d42e1f46b99598b28d9e0e`. The fourteen focused contributions are drafts: #14, #15, #17, #18 and #20 through #29. The tested combined production source is `62d9bfc699c2817d0815dccf35dc099aeaf112f2`; subsequent head `b18b26eb8d239fe466f770a85bd7b666a0df2305` changes only qualification documentation. The latter has no exact-head CI-pass claim.
+Target: `sol-znn/syrius-extension`, master `247f02517f67f60ec7d42e1f46b99598b28d9e0e`. The fourteen focused contributions are drafts: #14, #15, #17, #18 and #20 through #29. The latest completed combined hosted qualification is source `208bc0b901692b225a081b6830012c29382d8b6d`. This continuation preserves additional supplied README notices and keeps approval actions in normal flow so they cannot cover preview text. Requalify the resulting exact head; prior hosted results do not attest a subsequent head.
 
 ## Review and integration
 
-Repository maintainers need to authorize the target workflows and review the exact PR heads. `action_required` is approval pending, not a passing or failing test. [Own-fork qualification](https://github.com/edgepillar/Syrius-Extension/actions/runs/37933315255) is bounded evidence for its tested source and cannot replace target approval.
+Repository maintainers need to authorize the target workflows and review the exact PR heads. `action_required` is approval pending, not a passing or failing test. [Own-fork qualification](https://github.com/edgepillar/Syrius-Extension/actions/runs/37942750666) is bounded evidence for its tested source and cannot replace target approval.
 
 The integration must preserve these five shared files:
 
 | File | Contributions | Acceptance requirement |
 | --- | --- | --- |
 | `package.json` | #14, #17, #20, #21, #22, #23, #27, #28 | Preserve dependency/toolchain changes, twenty security commands and six browser commands. |
-| `webpack.config.js` | #17, #29 | Preserve tooling corrections and project/SDK notice packaging. |
+| `webpack.config.js` | #17, #29 | Preserve tooling corrections and project/SDK/Argon2/supplementary notice packaging. |
 | `src/components/modals/alert-modal.js` | #21, #28 | Preserve transaction-network presentation, dismissal-first focus and bounded dialog layout. |
 | `src/sections/Popup/Popup.scss` | #21, #26 | Preserve responsive review controls and reduced-motion behavior. |
 | `src/pages/settings/change-node/change-node.js` | #20, #22 | Preserve read-context invalidation and exact chain-identifier validation. |
@@ -41,7 +41,11 @@ The review sequence is: settle owner decisions; independently review a separatel
 
 ## Release and support gates
 
-Additional local evidence narrows three boundaries without closing their owner gates. Five offline production-provider/native-window cases passed on the unchanged `62d9bfc` package, including native connect/sign with independently verified Ed25519 output. The after-claim interruption deliberately held a real browser API callback before cryptographic continuation; it did not test transaction publication. The pinned SDK's shipped Node keyfile paths failed compatibility probes; a four-line, unapplied source candidate passed nineteen native checks on macOS arm64, which is not a corrected SDK release or support matrix. A combined build adding the supplied Argon2 browser wrapper's MIT notice preserved all sixty earlier package members byte for byte and added only that notice. No cryptography, dependency pin or runtime bytes were changed by the packaging fix.
+Additional local evidence narrows boundaries without closing their owner gates. Five offline production-provider/native-window cases passed on the earlier `62d9bfc` package, including native connect/sign with independently verified Ed25519 output. The after-claim interruption deliberately held a real browser API callback before cryptographic continuation; it did not test transaction publication. Four real-provider keyboard/accessibility cases passed on the subsequent working-tree candidate at actual 100%/200% browser zoom, including final message-glyph visibility and safe rejection. Structural accessibility-tree evidence is separate from screen-reader speech.
+
+The pinned SDK's shipped Node keyfile paths failed compatibility probes. A four-line, unapplied source candidate now passes strict source checks and both Node/browser builds using the SDK's own locked development tools. Its rebuilt explicit Node bundle passes nineteen checks on macOS arm64 with the unchanged extension Argon2 0.45.1 external. This does not qualify the SDK's legacy native dependency, browser distribution interoperability, default export selection, a corrected SDK release or a support matrix. No installer, preparation script or dependency upgrade was run.
+
+The notice-only combined build preserves all sixty-one preceding package members byte for byte and adds complete supplied README sections for nine attributable package versions. Reviewed versions and full-section hashes fail closed on drift; five negative controls pass. Packaging does not alter runtime bytes or dependencies. This is a bounded omission correction, not complete embedded/compiler attribution or legal coverage.
 
 | Gate | Owner | Required evidence |
 | --- | --- | --- |

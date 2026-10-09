@@ -181,6 +181,12 @@ module.exports = {
           to: 'argon2-browser.LICENSE.txt',
           toType: 'file',
         },
+        {
+          from: path.join(__dirname, 'utils/third-party-readme-notices.js'),
+          to: 'third-party-readme-notices.txt',
+          toType: 'file',
+          transform: () => require('./utils/third-party-readme-notices')(),
+        },
         { from: path.join(__dirname, 'utils/approval-pow-worker.js'), to: 'approval-pow-worker.js', transform: () => require('./utils/approval-pow-worker')() },
         {
           from: './src/manifest.json',
