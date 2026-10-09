@@ -10,6 +10,7 @@ on:
       - manifest-v3
       - codex/qualify-2026-10-08
       - codex/qualify-keyfiles-2026-10-09
+      - codex/qualify-remaining-2026-10-09
     tags:
       - 'v*'
   workflow_dispatch:
@@ -125,6 +126,13 @@ jobs:
           test -n "$browser_path"
           "$browser_path" --version
           CHROMIUM_PATH="$browser_path" npm run test:browser
+
+      - name: Qualify modal keyboard focus
+        shell: bash
+        run: |
+          browser_path="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+          test -n "$browser_path"
+          CHROMIUM_PATH="$browser_path" node utils/modal-focus-browser-test.js
 
       - name: Build production extension
         run: npm run build
