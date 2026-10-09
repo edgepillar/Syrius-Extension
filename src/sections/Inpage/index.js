@@ -82,12 +82,21 @@ import { limits, validateEnvelope, busy } from '../../services/utils/approvalLim
     new Promise((resolve, reject) => {
       lifetime.check();
       if (!active) { reject({ code: 4900, message: 'This document is no longer active. Make a new request after returning.' }); return; }
-      const id = nextId();
-      validateEnvelope({ id, method, params });
       if (pending.size >= limits.activeHandlers) { reject({ code: busy().code, message: busy().message }); return; }
+      const id = nextId();
+      // postMessage normalized cross-realm objects and data-only class instances
+      // before relay validation. Preserve that boundary before retaining work,
+      // and keep only the copied, validated request while awaiting activation.
+      let envelope;
+      try { envelope = structuredClone({ id, method, params }); }
+      catch {
+        reject({ code: -32602, message: 'Wallet request parameters could not be copied safely.' });
+        return;
+      }
+      validateEnvelope(envelope);
       const needsApproval = method !== 'znn_accounts' && method !== 'znn_chainId' && method !== 'znn_nodeUrl';
       const timeout = needsApproval ? limits.ttl + 60000 : transportTimeoutMs;
-      const waiting = { resolve, reject, method, params, needsApproval, deferred: Boolean(document.prerendering), deadline: Date.now() + timeout };
+      const waiting = { ...envelope, resolve, reject, needsApproval, deferred: Boolean(document.prerendering), deadline: Date.now() + timeout };
       pending.set(id, waiting);
       // Include activation waiting in the existing transport budget. Neither
       // realm posts a privileged request while the native document prerenders.

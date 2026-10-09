@@ -156,6 +156,15 @@ const watchdog = setTimeout(() => { console.error('Native document fixture timed
   assert.equal(await evaluate(page, 'isSecureContext'), false);
   assert.equal(await evaluate(page, 'typeof crypto.randomUUID'), 'undefined');
   assert.deepEqual(await evaluate(page, 'zenon.getAccounts().catch(error=>({failure:error}))'), []);
+  // Native postMessage accepted data-only class instances and plain objects
+  // from another same-origin realm. Pre-retention validation keeps that API
+  // boundary and returns a sanitized error for uncloneable parameters.
+  assert.deepEqual(await evaluate(page, `(()=>{const frame=document.createElement('iframe');document.body.appendChild(frame);
+    const foreign=new frame.contentWindow.Object();foreign.nested=new frame.contentWindow.Object();foreign.nested.amount='1';
+    class DataOnly{constructor(){this.nested={label:'inert'};}}
+    return zenon.request({method:'znn_accounts',params:{foreign,instance:new DataOnly()}}).finally(()=>frame.remove());})()`), []);
+  const uncloneable = await evaluate(page, "zenon.request({method:'znn_accounts',params:{callback(){}}}).then(()=>({unexpected:true}),error=>({code:error.code,message:error.message}))");
+  assert.deepEqual(uncloneable, { code: -32602, message: 'Wallet request parameters could not be copied safely.' });
   await begin(page); const first = await waitRequest(); assert.equal(first.frameId, 0);
   assert.equal(await current(first), true);
   // Opening an approval changes focus but must not expire its request.
@@ -356,7 +365,7 @@ const watchdog = setTimeout(() => { console.error('Native document fixture timed
   await cdp('Target.closeTarget', { targetId: second.targetId });
   await eventually(() => evaluate(control, "records('znn.pendingRequests')"), value => !Object.values(value || {}).some(r => r.tabId === closing.tabId), 'tab close cleanup');
   const result = { browser: version.Browser, actualModules: [...new Set([...files, ...closure('src/sections/Content/index.js'), ...closure('src/sections/Inpage/index.js')])], nonSecureHttp: true, lifecycleCaptureOrdering: true, nativeNavigationFence: true, documentRewriteRecovery: true, subframeRewriteRecovery: true, emptyRewriteRecovery: true, ordinaryBodyEdits: true, sameOriginNavigation: true,
-    crossOriginNavigation: true, nativeSubframeNavigation: true, bfcacheRestored: restored, oldApprovalsCancelled: true, freshRequestsAndEvents: true, multiKeyParamsIdentity: true, independentLegacyTabs: true, provisionalGrantCancellation: true, completedConsentSurvivesNavigation: true, abortedNavigationKeepsEvents: true, prerenderedPageReadsAndEvents: true, prerenderDirectAdmission: true, prerenderCancellation: true, prerenderNaturalExpiry: true, tabCloseCleanup: true };
+    crossOriginNavigation: true, nativeSubframeNavigation: true, bfcacheRestored: restored, oldApprovalsCancelled: true, freshRequestsAndEvents: true, multiKeyParamsIdentity: true, independentLegacyTabs: true, provisionalGrantCancellation: true, completedConsentSurvivesNavigation: true, abortedNavigationKeepsEvents: true, prerenderedPageReadsAndEvents: true, prerenderDirectAdmission: true, prerenderCancellation: true, prerenderNaturalExpiry: true, structuredCloneProviderInputs: true, tabCloseCleanup: true };
   fs.writeFileSync(path.join(dir, 'result.json'), JSON.stringify(result, null, 2));
   console.log(JSON.stringify({ ...result, artifact: path.join(dir, 'result.json') }));
 })().catch(error => { console.error(error.stack || String(error)); process.exitCode = 1; }).finally(async () => {

@@ -5,6 +5,7 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const crypto = require('node:crypto').webcrypto;
+const vm = require('node:vm');
 const babel = require('@babel/core');
 const root = path.join(__dirname, '..');
 const compiled = new Map();
@@ -130,6 +131,31 @@ const message = (id, method = 'znn_accounts', params = {}) => ({ target: 'znn-co
   }
   // The actual public provider uses the same admission cap and JSON limits,
   // one callback, finite budgets and page-lifetime retirement.
+  {
+    const f = fixture('Inpage');
+    const crossRealm = vm.runInNewContext('({ nested: { amount: "1" }, list: [{ value: "inert" }] })');
+    class DataOnly { constructor() { this.nested = vm.runInNewContext('({ amount: "2" })'); this.label = 'inert'; } }
+    const params = { foreign: crossRealm, instance: new DataOnly() };
+    const response = f.window.zenon.request({ method: 'znn_accounts', params });
+    // Admission owns a normalized snapshot; later caller edits cannot enlarge
+    // or replace the parameters retained by an unopened prerender.
+    crossRealm.nested.amount = 'changed'; params.instance.label = 'changed';
+    assert.equal(f.timers.size, 1); assert.equal(f.listeners(), 1); f.activate();
+    const request = f.posted.at(-1);
+    assert.deepEqual(request.params, { foreign: { nested: { amount: '1' }, list: [{ value: 'inert' }] },
+      instance: { nested: { amount: '2' }, label: 'inert' } });
+    f.page({ target: 'znn-inpage', kind: 'response', id: request.id, result: [] });
+    assert.deepEqual(await response, []);
+    assert.equal(f.timers.size, 0); assert.equal(f.listeners(), 0);
+  }
+  {
+    const f = fixture('Inpage');
+    for (const params of [{ callback() {} }, new Proxy({}, {}), { get value() { throw Error('private input marker'); } }]) {
+      await assert.rejects(f.window.zenon.request({ method: 'znn_accounts', params }), error =>
+        error.code === -32602 && error.message === 'Wallet request parameters could not be copied safely.');
+    }
+    assert.equal(f.timers.size, 0); assert.equal(f.listeners(), 0); assert.equal(f.posted.length, 0);
+  }
   {
     const f = fixture('Inpage');
     await assert.rejects(f.window.zenon.request({ method: 'znn_sign', params: { message: 'x'.repeat(f.limits.bytes) } }), error => error.code === -32602);
