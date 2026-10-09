@@ -29,22 +29,22 @@ const AlertModal = ({ children, title, type = 'confirm', onDismiss, onSuccess, c
   };
 
   return (
-    <div className="alert-modal">
-      <div className="modal-header">
+    <div className="alert-modal" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div className="modal-header" style={{ flexShrink: 0 }}>
         <span>{title}</span>
-        <button type="button" className="close-modal" onClick={dismiss} aria-label="Close">
+        <button type="button" className="close-modal" onClick={dismiss} aria-label="Close" data-modal-dismiss>
           <img alt="" src={require('./../../assets/close-icon.svg')} width="12" />
         </button>
       </div>
 
-      <div className={`modal-divider ${style.accent}`} />
+      <div className={`modal-divider ${style.accent}`} style={{ flexShrink: 0 }} />
 
-      <div className="modal-content">
+      <div className="modal-content" style={{ minHeight: 0, overflowY: 'auto' }}>
         {transaction && <SelectedTransactionNetwork />}
         {children}
 
         <div className="modal-action-area">
-          <button type="button" className="button secondary w-100" onClick={dismiss}>
+          <button type="button" className="button secondary w-100" onClick={dismiss} data-modal-dismiss>
             Cancel
           </button>
           <button
