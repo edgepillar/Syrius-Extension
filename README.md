@@ -99,10 +99,11 @@ sources fail the check. Follow [SETUP.md](SETUP.md#2-install-and-build) to prepa
 the source-only checkout at the same revision used by CI; no Go compiler or
 running Zenon node is required.
 
-`npm run test:browser` runs the existing vault, request identity, approval queue
-and document lifecycle fixtures in a native Chromium browser. It uses
-`CHROMIUM_PATH`, or the existing macOS Brave default when unset. CI discovers
-the runner's Chrome/Chromium executable and fails if the browser is unavailable.
+`npm run test:browser` runs the native browser fixtures registered in
+`package.json`, including the existing vault, request identity, approval queue
+and document lifecycle checks. It uses `CHROMIUM_PATH`, or the existing macOS
+Brave default when unset. CI discovers the runner's Chrome/Chromium executable
+and fails if the browser is unavailable.
 These fixtures do not exercise real wallet encryption or a live Zenon network.
 
 ### Dev harness

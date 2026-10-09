@@ -4,8 +4,9 @@ The executable workflow is `build-and-release.yml` in this directory.
 
 It builds the Manifest V3 extension with Node.js 24, runs the dependency audit,
 lint checks, pinned Go-source ABI comparison, validation failure-path checks,
-security regression suites and four native browser fixtures. A successful build
-creates a Chrome/Brave-ready ZIP with `manifest.json` at its root.
+security regression suites and native browser fixtures registered in
+`package.json`. A successful build creates a candidate ZIP with
+`manifest.json` at its root.
 
 Pushes to `main` automatically create the matching version tag and publish the
 ZIP and SHA-256 checksum in a GitHub Release. The repository defaults to
@@ -17,9 +18,12 @@ update.
 
 Both release paths refuse an existing release for the version tag. Rerunning a
 tag workflow cannot replace an already published ZIP or checksum; publish a
-new version for different bytes. The publication regression runs the actual
-workflow shell with an inert GitHub boundary. It does not create a release or
-establish repository-enforced tag or release immutability.
+new version for different bytes. Before publication, any existing remote version
+tag must resolve uniquely to the candidate commit. Tag workflows also reject a
+missing tag; the automatic path may create one. This preflight does not lock a
+tag against later changes. The publication regression runs the actual workflow
+shell and tag query with an inert GitHub boundary. It does not create a release
+or establish repository-enforced tag or release immutability.
 See `RELEASE-CHECKLIST.md` at the repository root for the proposed final-candidate,
 browser, distribution and maintainer-owned acceptance gates.
 
