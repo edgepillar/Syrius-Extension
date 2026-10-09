@@ -3,15 +3,41 @@
 The executable workflow is `build-and-release.yml` in this directory.
 
 It builds the Manifest V3 extension with Node.js 24, runs the dependency audit,
-lint checks and focused regression tests, creates a Chrome/Brave-ready ZIP with
-`manifest.json` at its root, and publishes a SHA-256 checksum. Pushes to
-`main` automatically create the matching tag (for example `v0.3.2`) and
-publish both assets in a GitHub Release. Pushes to `development` and
-`manifest-v3` remain artifact-only validation builds.
+lint checks, pinned Go-source ABI comparison, validation failure-path checks,
+security regression suites and native browser fixtures registered in
+`package.json`. A successful build creates a candidate ZIP with
+`manifest.json` at its root.
+
+Pushes to `main` automatically create the matching version tag and publish the
+ZIP and SHA-256 checksum in a GitHub Release. The repository defaults to
+`master`; pushes there, to `development` and to `manifest-v3` create validation
+artifacts without an automatic release. A matching version tag provides the
+alternate release path. The workflow verifies that the tag matches the manifest
+version before building. A successful master run alone does not publish an
+update.
+
+Both release paths refuse an existing release for the version tag. Rerunning a
+tag workflow cannot replace an already published ZIP or checksum; publish a
+new version for different bytes. Before publication, any existing remote version
+tag must resolve uniquely to the candidate commit. Tag workflows also reject a
+missing tag; the automatic path may create one. This preflight does not lock a
+tag against later changes. The publication regression runs the actual workflow
+shell and tag query with an inert GitHub boundary. It does not create a release
+or establish repository-enforced tag or release immutability.
+See `RELEASE-CHECKLIST.md` at the repository root for the proposed final-candidate,
+browser, distribution and maintainer-owned acceptance gates.
 
 The workflow artifact is the extension ZIP itself; it is uploaded with
 `archive: false` so GitHub does not wrap it in another ZIP. The checksum is
-recreated for the GitHub Release and published alongside the package.
+recreated for the GitHub Release using the ZIP basename and published alongside
+the package, so it can be verified from an ordinary download directory.
+
+The ABI comparison requires the definitions checked out at the revision pinned
+in the workflow. Missing or empty definitions fail rather than skip the check;
+no Go compiler or running node is required. The native browser fixtures use the
+runner's Chrome/Chromium executable, disposable profiles and synthetic inputs.
+They qualify the exercised browser boundaries, not real wallet encryption or a
+live network transaction. See `SETUP.md` for local qualification commands.
 
 The pinned `znn-ts-sdk` commit is consumed as an HTTPS source archive rather
 than a Git dependency. The upstream Git package runs a non-deterministic
@@ -26,20 +52,25 @@ signing is not needed for loading the ZIP as an unpacked extension and a
 rotating key would change the extension ID.
 
 The audit is deliberately a hard gate for moderate, high and critical
-advisories. The current lockfile reports only the unpatched low-severity
-elliptic advisory in the legacy ethers 5/SDK chain, and
-`npm audit --audit-level=moderate` passes without an ignore list or
-`continue-on-error`. The install tree removes
-the old native `bigint-buffer` and Argon2/node-pre-gyp paths, pins safe `ws` and
-`qs` versions, uses current copy/Webpack releases, and runs React Router 7.
-The local
-`vendor/bigint-buffer` implementation validates fixed-width conversions and is
-covered by a focused round-trip/bounds test.
+advisories: `npm audit --audit-level=moderate`. Advisory data can change without
+a lockfile change, so a previous passing audit does not establish the result at
+a new candidate or release head. Run the complete workflow at that exact head.
+
+The local `vendor/bigint-buffer` implementation replaces the old native package,
+validates fixed-width conversions and is covered by a focused round-trip/bounds
+test. Native Argon2 and its install script remain in the lockfile through the
+pinned SDK. Hosted installation uses `npm ci --legacy-peer-deps` without an
+explicit `--ignore-scripts` flag. Actual script execution depends on the npm
+version and install-script approval policy; inspect the toolchain and install
+log rather than inferring native Argon2 execution from a passing install.
+Local checks using `--ignore-scripts` do not establish hosted installation or
+native lifecycle execution. Browser WASM encryption is a separate qualification
+boundary.
 
 Do not lower the audit threshold, add an ignore list, or use
-`continue-on-error` to make a real-funds release appear green. The remaining
-The remaining elliptic advisory has no upstream patched release. It requires a
-separate migration of the SDK's legacy ethers/crypto-browserify signing chain;
+`continue-on-error` to make a real-funds release appear green. Assess any
+remaining elliptic advisory against reachable uses in the legacy ethers/SDK
+dependency chain. A cryptographic dependency migration requires separate review;
 do not replace it with an unreviewed fork or suppress the audit result.
 
 If release creation is denied by repository policy, allow workflows to request
