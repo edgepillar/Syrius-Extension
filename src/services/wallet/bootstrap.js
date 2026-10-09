@@ -14,6 +14,7 @@ import {
 } from '../utils/storage';
 import { announceUnlock } from './announce';
 import vault from './vault';
+import { beginReadContextChange } from './readContext';
 
 // Everything that has to happen between "this is the right password" and "the
 // wallet is on screen", in the one order that works.
@@ -28,7 +29,7 @@ import vault from './vault';
 const connectToNode = async (dispatch, isCurrent = () => true) => {
   const nodeUrl = getCurrentNodeUrl() || defaultNodeUrl;
   dispatch(storeNodeUrl(nodeUrl));
-
+  const finishReadChange = beginReadContextChange();
   try {
     // Inside the try: remembering the node is optional, and a storage failure
     // here must not undo an unlock that has already been adopted.
@@ -39,6 +40,8 @@ const connectToNode = async (dispatch, isCurrent = () => true) => {
   } catch (err) {
     if (isCurrent()) dispatch(storeIsConnected(false));
     return false;
+  } finally {
+    finishReadChange();
   }
 };
 

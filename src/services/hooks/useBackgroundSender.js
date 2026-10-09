@@ -3,6 +3,7 @@ import { useDispatch } from 'react-redux';
 import { Enums, Zenon } from 'znn-ts-sdk';
 
 import vault from '../wallet/vault';
+import { captureHistoryNetwork } from '../wallet/historyObservation';
 import { invalidateAccountCache } from './useAccount';
 import { notify } from '../utils/notify';
 import { readableError } from '../utils/errors';
@@ -37,6 +38,9 @@ const useBackgroundSender = () => {
   const sendInBackground = useCallback(
     (template, { row, addressIndex, successMessage } = {}) => {
       const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const owner = row?.owner;
+      const zenon = Zenon.getSingleton();
+      const historyContext = captureHistoryNetwork(zenon);
 
       // The glyph, the type and the contract's name come off the template, so a
       // call site only supplies what it alone knows — the wording, the amount
@@ -48,6 +52,7 @@ const useBackgroundSender = () => {
           status: pendingStatus.sending,
           ...describeOutgoingTemplate(template),
           ...row,
+          network: historyContext.network,
         })
       );
 
@@ -55,7 +60,6 @@ const useBackgroundSender = () => {
       // returns to the dashboard while this runs.
       (async () => {
         try {
-          const zenon = Zenon.getSingleton();
           const keyPair = await vault.getSigningKeyPair(addressIndex);
 
           const signed = await zenon.send(template, keyPair, (status) => {
@@ -78,6 +82,10 @@ const useBackgroundSender = () => {
               id,
               status: pendingStatus.settled,
               hash: signed?.hash?.toString(),
+              // If the mutable SDK context moved during send, do not guess
+              // which endpoint accepted the block or clear its row by default.
+              network: historyContext.isCurrent() && signed?.chainIdentifier === historyContext.network.chainIdentifier &&
+                signed?.address?.toString() === owner ? historyContext.network : null,
             })
           );
 
