@@ -2,7 +2,7 @@
 
 This optional test loads a copy of an existing production extension package and drives its UI in disposable Chromium extension pages through CDP. It exercises the packaged SDK's browser Argon2/AES path without replacing the SDK, rebuilding the package, injecting a wallet, or enabling the development wallet bridge. These pages load `popup.html`; they are not native toolbar-action popups.
 
-The expected input is the combined candidate containing [PR #15](https://github.com/sol-znn/syrius-extension/pull/15) (recovery form submission) and [PR #23](https://github.com/sol-znn/syrius-extension/pull/23) (awaited encryption before create/import persistence), together with the wallet lifecycle implementation. Adding this test does not imply that the target repository's current `master` passes it. This document records the procedure, not a successful run.
+The expected input is the combined candidate containing [PR #15](https://github.com/sol-znn/syrius-extension/pull/15) (recovery form submission), [PR #23](https://github.com/sol-znn/syrius-extension/pull/23) (awaited encryption before create/import persistence), and [PR #24](https://github.com/sol-znn/syrius-extension/pull/24) (browser-native address reconstruction for wallet removal), together with the wallet lifecycle implementation. Adding this test does not imply that the target repository's current `master` passes it. This document records the procedure, not a successful run.
 
 ## Run manually
 
