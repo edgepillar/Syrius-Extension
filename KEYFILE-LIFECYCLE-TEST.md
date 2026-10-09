@@ -1,0 +1,53 @@
+# Production keyfile lifecycle check
+
+This optional test loads a copy of an existing production extension package and drives its UI in disposable Chromium extension pages through CDP. It exercises the packaged SDK's browser Argon2/AES path without replacing the SDK, rebuilding the package, injecting a wallet, or enabling the development wallet bridge. These pages load `popup.html`; they are not native toolbar-action popups.
+
+The expected input is the combined candidate containing [PR #15](https://github.com/sol-znn/syrius-extension/pull/15) (recovery form submission) and [PR #23](https://github.com/sol-znn/syrius-extension/pull/23) (awaited encryption before create/import persistence), together with the wallet lifecycle implementation. Adding this test does not imply that the target repository's current `master` passes it. This document records the procedure, not a successful run.
+
+## Run manually
+
+Use Node.js 24 on `PATH` and a Chromium executable supporting CDP extension loading. Point to an already extracted production package containing `manifest.json`, `popup.html`, and its original bundles. No dependency installation or package rebuild is required for this test.
+
+```sh
+CHROMIUM_PATH="/path/to/chromium-or-chrome-for-testing" \
+SYRIUS_EXTENSION_DIR="/path/to/extracted-production-package" \
+SYRIUS_LIFECYCLE_REPORT="/path/to/keyfile-lifecycle-report.json" \
+node utils/keyfile-lifecycle-browser-test.js
+```
+
+`SYRIUS_LIFECYCLE_REPORT` is optional. The input defaults to `build/` when `SYRIUS_EXTENSION_DIR` is omitted. Allow several minutes for actual encryption/decryption and the natural five-minute expiry case. The output contains case names, booleans, package/browser identifiers, and network counters; failed runs exit unsuccessfully without dumping evaluated expressions or underlying exception contents.
+
+## Cases and evidence
+
+| Case | Required observation |
+| --- | --- |
+| Create | Generated phrase confirmation, encrypted SDK keyfile persistence, successful unlock, and expected encrypted keyfile shape. Confirmation supports generated 12- or 24-word phrases, including repeated words; the pinned SDK's random creation uses 32-byte entropy and is expected to produce 24 words. |
+| Unlock | Incorrect password rejected without a live shared unlock; correct password accepted. |
+| Backup | Incorrect password reveals no phrase DOM; correct password recovers the generated phrase. |
+| Explicit lock | Backup DOM removed from two extension pages, shared secret revoked, and public state withdrawn. A non-secret locked tombstone is permitted. |
+| Password rotation | Incorrect current password preserves the keyfile; valid rotation changes encrypted bytes while preserving account identity. Old password rejected, new password accepted, and recovered phrase unchanged. |
+| Timed document closure | Reopening an extension document resumes the timed session without changing the encrypted entry. |
+| On close | Completed policy stores no resumable entropy or public unlock; closing its owner document makes the next document require a password. |
+| Natural five-minute expiry | Actual elapsed time revokes both extension pages and removes backup DOM. No clocks or session records are shortened by the harness. |
+| Browser restart | Same disposable profile and install directory retain the encrypted wallet, but require its password again. |
+| Runtime reload | `chrome.runtime.reload()` invalidates the old extension generation; same-path re-registration preserves extension identity and encrypted data, while requiring another password unlock. |
+| Recovery import | The generated backup imports under another name with matching account identity and independently encrypted bytes. |
+| Removal | Incorrect password preserves the wallet. Removing one import revokes its session, preserves the other encrypted entry, and leaves that other wallet unlockable. Removing the last wallet returns to onboarding and withdraws shared secrets. |
+
+One case intentionally instruments `Storage.prototype.setItem` to reject the wallet write **after real encryption**. It confirms that the fault was reached, restores the original method, checks that no wallet or live unlock was created, and retries. This is a storage fault-injection case, separate from ordinary real-crypto lifecycle qualification; it does not replace Argon2, AES, or the application callback.
+
+The expiry case initially requires a finite deadline more than 290 seconds and at most 305 seconds away. An observed lock must occur between that deadline minus a two-second observation tolerance and the deadline plus 30 seconds; reaching the upper bound without observing a lock fails. The second page must then lose its backup DOM within 15 seconds. These are harness observation bounds, not a precise browser scheduling guarantee or proof that pointer/keyboard activity renews the session.
+
+## Isolation and privacy
+
+The input package is copied without modifying its files or CSP. The harness compares a file-tree digest before and after use. That digest identifies the tested members; it is not a ZIP checksum, reproducible-build result, or release attestation. Only connection and receive/lock preferences are initialized in application storage. Chrome's developer mode is enabled through its normal profile configuration API solely in the owned disposable profile, and read back before loading the unpacked package; reload also requires the same extension ID to be enabled.
+
+A local denying proxy, CDP request blocking, and offline conditions guard browser targets before product execution. Local HTTP/WebSocket guard checks must fail, and observed external responses or WebSocket handshake responses fail the run. These are browser-level network guards, not an OS firewall or a claim of zero network attempts. No live node, transaction, or user wallet is used.
+
+Fresh passwords and UI-generated wallet material stay inside the test process/browser during execution. The harness does not log phrases, passwords, addresses, encrypted keyfiles, raw CDP payloads, DOM dumps, or screenshots. Persistent `localStorage`, `chrome.storage.local`, and `chrome.storage.sync` values are sampled in memory for the known phrase, chosen passwords, and current session entropy. Timed `chrome.storage.session` legitimately contains resumable entropy; the test instead requires its withdrawal on lock and its absence under On close. These checks do not prove absence in every encoding, heap zeroization, forensic erasure, or protection from browser/OS backups and crash recovery.
+
+The harness owns a fresh temporary profile, attempts browser shutdown, and removes the profile on normal completion, caught failure, SIGINT, and SIGTERM. Cleanup failures make the run unsuccessful. SIGKILL or abrupt machine/process termination cannot run those handlers; do not retain or publish a leftover profile as a test artifact.
+
+## Remaining qualification boundaries
+
+Run results apply only to the reported package and browser version. This test does not qualify native toolbar-popup closure/geometry, the minimum Chrome version or Brave without separate runs, a real old-version-to-new-version upgrade, storefront permission/update consent, Node native Argon2, independent KDF/AES conformance vectors, live-chain behavior, persistent writer concurrency, or transaction recovery. Same-path runtime reload and re-registration are explicitly not a version migration. The current matrix imports the generated phrase; independent 12-word imports, invalid import input, and weak/mismatched new-password browser cases remain separate gates.
