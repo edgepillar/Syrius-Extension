@@ -73,8 +73,9 @@ const fixture = async () => {
       if (!id.startsWith('.')) return require(id);
       const target = path.resolve(path.dirname(filename), id); return load(path.extname(target) ? target : target + '.js');
     };
-    new Function('module', 'exports', 'require', 'localStorage', 'chrome', 'navigator', 'crypto', 'setTimeout', 'clearTimeout', compiled.get(filename))(
-      module, module.exports, req, localStorage, chrome, { locks }, crypto.webcrypto, timer, clearTimeout);
+    // The browser build disables the application's Buffer shim; the SDK keeps its own bundled implementation.
+    new Function('module', 'exports', 'require', 'localStorage', 'chrome', 'navigator', 'crypto', 'setTimeout', 'clearTimeout', 'Buffer', compiled.get(filename))(
+      module, module.exports, req, localStorage, chrome, { locks }, crypto.webcrypto, timer, clearTimeout, undefined);
     return module.exports;
   };
   const vault = load('src/services/wallet/vault.js').default;
