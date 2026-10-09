@@ -1,4 +1,5 @@
 import { createSlice } from '@reduxjs/toolkit';
+import { sameHistoryNetwork } from '../wallet/historyObservation';
 
 // Outgoing blocks that have been submitted but are not in the account's chain
 // yet.
@@ -47,8 +48,14 @@ export const pendingTransactionsSlice = createSlice({
     clearPendingTransaction: (state, action) => {
       state.items = state.items.filter((item) => item.id !== action.payload);
     },
-    clearSettledTransactions: (state) => {
-      state.items = state.items.filter((item) => item.status !== pendingStatus.settled);
+    clearSettledTransactions: (state, action) => {
+      const { owner, network, hashes } = action.payload || {};
+      if (typeof owner !== 'string' || !owner || !Array.isArray(hashes)) return;
+      const observed = new Set(hashes.filter((hash) => typeof hash === 'string' && hash));
+      // A node-accepted row remains until its exact block is observed in the
+      // same account/network. Missing context is not evidence of observation.
+      state.items = state.items.filter((item) => !(item.status === pendingStatus.settled &&
+        item.owner === owner && sameHistoryNetwork(item.network, network) && observed.has(item.hash)));
     },
     // On lock, and on switching address: what is on screen belongs to the
     // account that was open.

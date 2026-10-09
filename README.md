@@ -25,8 +25,8 @@ notes behind it are in [REFACTOR.md](REFACTOR.md).
 - **Pillars** — delegate, undelegate, collect rewards.
 - **Plasma** — fuse and cancel QSR fusions.
 - **Staking** — lock ZNN, withdraw matured stakes, collect rewards.
-- **Nodes** — keep a list of nodes, switch between them, and set the chain
-  identifier the wallet signs for (detected from the node it is connected to).
+- **Nodes** — keep a list of nodes, switch between them, and configure the chain
+  identifier the wallet signs for. Verify the identifier with the node operator.
 - **dApp bridge** — a `window.zenon` provider with per-origin permissions and a
   Connected Sites screen.
 - **Message signing** — sign a message by hand under Settings, or answer a
@@ -44,7 +44,7 @@ document-bound provider events and the shared session coordinator on Chrome 111.
 ### From a release
 
 Every `v*.*.*` tag is built by GitHub Actions and published as a Chrome/Brave
-ZIP on the [releases page](https://github.com/MichZNN/syrius-extension/releases).
+ZIP on the [releases page](https://github.com/sol-znn/syrius-extension/releases).
 Open `chrome://extensions/` or `brave://extensions/`, enable "Developer mode",
 and drag the ZIP onto the extensions page. Alternatively, extract it and choose
 **Load unpacked**.
@@ -52,15 +52,15 @@ and drag the ZIP onto the extensions page. Alternatively, extract it and choose
 ### From source
 
 1. **Prerequisites**
-   - Node.js 18 or higher
-   - npm 8 or higher
+   - Node.js 24.x (as pinned in `.nvmrc`)
+   - npm 10 or higher
 
 2. **Build the extension**
 
    ```bash
-   git clone https://github.com/MichZNN/syrius-extension.git
+   git clone https://github.com/sol-znn/syrius-extension.git
    cd syrius-extension
-   npm install
+   npm ci --legacy-peer-deps
    npm run build
    ```
 
@@ -73,18 +73,38 @@ and drag the ZIP onto the extensions page. Alternatively, extract it and choose
 ## Development
 
 ```bash
-npm install
+npm ci --legacy-peer-deps
 npm run build      # production build into build/
 npm run lint
-npm run test       # checks the embedded-call decoder against go-zenon's ABIs
+
+# Create a separate source-only checkout for the ABI checks.
+git clone --no-checkout https://github.com/zenon-network/go-zenon.git ../go-zenon-abi
+git -C ../go-zenon-abi checkout --detach 667a69d9e9a418edf7580b08492ba5dcb9efd63a
+export GO_ZENON_ABI_DIR='../go-zenon-abi/vm/embedded/definition'
+npm run test
+node --test utils/validation-gates-test.js
+npm run test:security
+# Native browser checks use disposable profiles and synthetic fixtures.
+# Set CHROMIUM_PATH to your current Chrome/Chromium executable when needed.
+npm run test:browser
 npm run prettier
 ```
 
-`npm test` re-derives every embedded contract's method selectors straight from
-`../go-zenon/vm/embedded/definition/*.go` and feeds synthetic blocks through the
-decoder the wallet uses. It is the only check on the HTLC labels, since
-`znn-ts-sdk` has no HTLC implementation to compare against. It skips itself if
-go-zenon is not checked out alongside this repo.
+`npm test` re-derives every embedded contract's method selectors from the Go
+ABI definitions in `GO_ZENON_ABI_DIR`, or the legacy
+`../go-zenon/vm/embedded/definition` directory when unset. It feeds synthetic
+blocks through the decoder the wallet uses. It is the only check on the HTLC labels, since
+`znn-ts-sdk` has no HTLC implementation to compare against. Missing or empty ABI
+sources fail the check. Follow [SETUP.md](SETUP.md#2-install-and-build) to prepare
+the source-only checkout at the same revision used by CI; no Go compiler or
+running Zenon node is required.
+
+`npm run test:browser` runs the native browser fixtures registered in
+`package.json`, including the existing vault, request identity, approval queue
+and document lifecycle checks. It uses `CHROMIUM_PATH`, or the existing macOS
+Brave default when unset. CI discovers the runner's Chrome/Chromium executable
+and fails if the browser is unavailable.
+These fixtures do not exercise real wallet encryption or a live Zenon network.
 
 ### Dev harness
 

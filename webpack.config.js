@@ -4,7 +4,6 @@ const fileSystem = require('fs-extra');
 const env = require('./utils/env');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
-const { CleanWebpackPlugin } = require('clean-webpack-plugin');
 const TerserPlugin = require('terser-webpack-plugin');
 
 const ASSET_PATH = process.env.ASSET_PATH || '/';
@@ -160,8 +159,6 @@ module.exports = {
   },
 
   plugins: [
-    new CleanWebpackPlugin({ verbose: false }),
-
     new webpack.ProgressPlugin(),
 
     new webpack.EnvironmentPlugin(['NODE_ENV']),
@@ -173,6 +170,23 @@ module.exports = {
 
     new CopyWebpackPlugin({
       patterns: [
+        { from: './LICENSE', to: 'LICENSE', toType: 'file' },
+        {
+          from: path.join(path.dirname(require.resolve('znn-ts-sdk/package.json')), 'dist/index.js.LICENSE.txt'),
+          to: 'index.js.LICENSE.txt',
+          toType: 'file',
+        },
+        {
+          from: path.join(path.dirname(require.resolve('argon2-browser/package.json')), 'LICENSE'),
+          to: 'argon2-browser.LICENSE.txt',
+          toType: 'file',
+        },
+        {
+          from: path.join(__dirname, 'utils/third-party-readme-notices.js'),
+          to: 'third-party-readme-notices.txt',
+          toType: 'file',
+          transform: () => require('./utils/third-party-readme-notices')(),
+        },
         { from: path.join(__dirname, 'utils/approval-pow-worker.js'), to: 'approval-pow-worker.js', transform: () => require('./utils/approval-pow-worker')() },
         {
           from: './src/manifest.json',

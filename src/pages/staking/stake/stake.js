@@ -191,7 +191,7 @@ const Stake = () => {
 
   const confirmStake = () =>
     openModal(
-      <AlertModal type="confirm" title="Stake ZNN" confirmLabel="Stake" onSuccess={stake}>
+      <AlertModal transaction type="confirm" title="Stake ZNN" confirmLabel="Stake" onSuccess={stake}>
         <p>
           Lock <b>{amount} ZNN</b> for <b>{months} month{months === 1 ? '' : 's'}</b>? It cannot be
           withdrawn before then.

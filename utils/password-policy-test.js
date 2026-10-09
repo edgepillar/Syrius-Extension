@@ -10,13 +10,24 @@ const writes = [];
 const errors = [];
 const store = { entropy: 'fixture entropy', mnemonic: 'one two' };
 let correctCurrentPassword = true;
+let encryptedArguments;
+const encrypted = { opaqueEncryptedValue: true };
+const storage = { setItem: (key, value) => {
+  assert.equal(key, 'synthetic-wallets');
+  const entries = Object.entries(JSON.parse(value));
+  assert.equal(entries.length, 1);
+  assert.deepEqual(entries[0][1], encrypted);
+  writes.push([...encryptedArguments, entries[0][0]]);
+} };
 const sdk = {
   KeyStore: class {
     fromEntropy(entropy) { return { ...store, entropy }; }
     fromMnemonic() { return store; }
   },
+  KeyFile: { encrypt: async (...args) => { encryptedArguments = args; return encrypted; } },
   KeyStoreManager: class {
-    async saveKeyStore(...args) { writes.push(args); return 'saved'; }
+    constructor() { this.walletPath = 'synthetic-wallets'; }
+    listAllKeyStores() { return {}; }
     async getNewKeystore() { return store; }
   },
 };
@@ -28,7 +39,7 @@ const load = (file, resolve) => {
     configFile: false,
   });
   const mod = { exports: {} };
-  new Function('module', 'exports', 'require', code)(mod, mod.exports, resolve);
+  new Function('module', 'exports', 'require', 'localStorage', code)(mod, mod.exports, resolve, storage);
   return mod.exports;
 };
 const policy = load('src/services/wallet/password.js', (name) => {
@@ -110,7 +121,7 @@ const pages = [
   }
   assert.equal(writes.length, 0, 'invalid input reached the SDK writer');
   for (const password of strong) {
-    assert.equal(await policy.saveWalletWithPassword(store, password, 'test-wallet'), 'saved');
+    assert.equal(await policy.saveWalletWithPassword(store, password, 'test-wallet'), 'synthetic-walletstest-wallet');
     assert.deepEqual(writes.at(-1), [store, password, 'test-wallet']);
   }
   writes.length = 0;
