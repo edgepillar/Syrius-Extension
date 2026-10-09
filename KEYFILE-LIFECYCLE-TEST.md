@@ -47,7 +47,7 @@ The minimum-runtime procedure is optional and remains unqualified until its comp
 | On close | Completed policy stores no resumable entropy or public unlock; closing its owner document makes the next document require a password. |
 | Natural five-minute expiry | Actual elapsed time revokes both extension pages and removes backup DOM. No clocks or session records are shortened by the harness. |
 | Browser restart | Same disposable profile and install directory retain the encrypted wallet, but require its password again. |
-| Runtime reload | `chrome.runtime.reload()` invalidates the old extension generation; same-path re-registration preserves extension identity and encrypted data, while requiring another password unlock. |
+| Runtime reload | `chrome.runtime.reload()` invalidates the old extension generation. The modern transport uses same-path re-registration; the legacy transport verifies the same enabled ID. Both preserve encrypted data and require another password unlock. |
 | Recovery import | The generated backup imports under another name with matching account identity and independently encrypted bytes. |
 | Removal | Incorrect password preserves the wallet. Removing one import revokes its session, preserves the other encrypted entry, and leaves that other wallet unlockable. Removing the last wallet returns to onboarding and withdraws shared secrets. |
 
@@ -57,7 +57,7 @@ The expiry case initially requires a finite deadline more than 290 seconds and a
 
 ## Isolation and privacy
 
-The input package is copied without modifying its files or CSP. The harness compares a file-tree digest before and after use. That digest identifies the tested members; it is not a ZIP checksum, reproducible-build result, or release attestation. Only connection and receive/lock preferences are initialized in application storage. Chrome's developer mode is enabled through its normal profile configuration API solely in the owned disposable profile, and read back before loading the unpacked package; reload also requires the same extension ID to be enabled.
+The input package is copied without modifying its files or CSP. The harness compares a file-tree digest before and after use. That digest identifies the tested members; it is not a ZIP checksum, reproducible-build result, or release attestation. Only connection and receive/lock preferences are initialized in application storage. Chrome's developer mode is enabled through its normal profile configuration API solely in the owned disposable profile. The modern transport reads it back before loading the unpacked package; the legacy transport configures it after CLI startup. Reload requires the same extension ID to be enabled.
 
 A local denying proxy, CDP request blocking, and offline conditions guard browser targets before product execution in the modern transport. The optional legacy transport has the earlier CLI worker-startup boundary described above. Local HTTP/WebSocket guard checks must fail, and observed external responses or WebSocket handshake responses fail the run. These are browser-level network guards, not an OS firewall or a claim of zero network attempts. No live node, transaction, or user wallet is used.
 
