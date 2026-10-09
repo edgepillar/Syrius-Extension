@@ -113,6 +113,11 @@ jobs:
       - name: Check release publication failure paths
         run: node --test utils/release-assets-test.js
 
+      # The build refuses to package when a pinned notice source drifts; this
+      # is the check that the refusal itself still works.
+      - name: Check third-party notice generation
+        run: node utils/third-party-readme-notices-test.js
+
       - name: Run dependency security regression tests
         run: npm run test:security
 
@@ -126,6 +131,19 @@ jobs:
 
       - name: Build production extension
         run: npm run build
+
+      # Every other browser fixture substitutes the SDK boundary, which is how
+      # wallet removal stayed broken in production builds while they all passed.
+      # This one drives the package just built, with its real Argon2/AES path,
+      # and includes an unshortened five-minute session expiry.
+      - name: Check production keyfile lifecycle
+        timeout-minutes: 15
+        shell: bash
+        run: |
+          browser_path="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+          test -n "$browser_path"
+          CHROMIUM_PATH="$browser_path" SYRIUS_EXTENSION_DIR="$PWD/build" \
+            node utils/keyfile-lifecycle-browser-test.js
 
       - name: Validate and package production build
         id: package

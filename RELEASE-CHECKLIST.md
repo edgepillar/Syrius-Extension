@@ -26,8 +26,8 @@ protection, appoint reviewers, approve transaction semantics or attest a release
 - Test the declared minimum Chrome version and supported Brave versions. Record
   the actual executable versions; do not infer support from a newer Chromium.
 - Qualify cold start, native toolbar popup closure, lock/expiry, password change,
-  recovery and removal. Test keyboard navigation, short windows and reduced
-  motion with visible progress and complete approval details.
+  recovery and removal. Test keyboard navigation and short windows with visible
+  progress and complete approval details.
 - Test a published previous version to the candidate under the intended
   installation channel. Unpacked re-registration does not qualify store/CRX
   identity, update delivery or permission consent. Review permission changes and

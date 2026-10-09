@@ -39,6 +39,14 @@ runner's Chrome/Chromium executable, disposable profiles and synthetic inputs.
 They qualify the exercised browser boundaries, not real wallet encryption or a
 live network transaction. See `SETUP.md` for local qualification commands.
 
+After the production build, `utils/keyfile-lifecycle-browser-test.js` drives
+that exact package in a disposable profile: create, unlock, backup, password
+rotation, lock, expiry, restart, import and removal, on the packaged Argon2/AES
+path. It waits out a real five-minute session expiry, so it adds about seven
+minutes to a run. The fixtures above replace the SDK boundary and passed while
+wallet removal was broken in production builds; this check is what would have
+failed. See `KEYFILE-LIFECYCLE-TEST.md` for what it does and does not establish.
+
 The pinned `znn-ts-sdk` commit is consumed as an HTTPS source archive rather
 than a Git dependency. The upstream Git package runs a non-deterministic
 `prepare` command that installs an unversioned `cipher-base` while applying a

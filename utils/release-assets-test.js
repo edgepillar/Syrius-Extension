@@ -5,7 +5,10 @@ const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
 
-const workflow = fs.readFileSync(path.join(__dirname, '../.github/workflows/build-and-release.yml'), 'utf8');
+// A Windows checkout with autocrlf hands this file over with CRLF endings, and
+// every split below is on a bare newline: the publication step was not found.
+const workflow = fs.readFileSync(path.join(__dirname, '../.github/workflows/build-and-release.yml'), 'utf8')
+  .replace(/\r\n/g, '\n');
 const publication = workflow.split('      - name: Publish GitHub release assets\n')[1];
 assert(publication, 'Publication step required');
 const script = publication.split('        run: |\n')[1].split('\n')
