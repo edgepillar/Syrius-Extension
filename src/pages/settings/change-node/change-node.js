@@ -8,6 +8,7 @@ import { storeChainIdentifier } from '../../../services/redux/connectionParamete
 import { detectNodeChainId, mainnetChainId, parseChainId } from '../../../services/utils/chainId';
 import { notify } from '../../../services/utils/notify';
 import { announceChain, captureLifetime } from '../../../services/wallet/announce';
+import { retireReadContext } from '../../../services/wallet/readContext';
 
 // Node and chain settings.
 //
@@ -44,6 +45,7 @@ const ChangeNode = () => {
       notify.error('Enter a whole number from 1 to 9007199254740991.');
       return;
     }
+    retireReadContext();
     Zenon.setChainIdentifier(parsed);
     setChainId(parsed);
     setDraftChainId(String(parsed));

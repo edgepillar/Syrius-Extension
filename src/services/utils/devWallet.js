@@ -1,4 +1,5 @@
 import { KeyStore, KeyStoreManager, Zenon } from 'znn-ts-sdk';
+import { retireReadContext } from '../wallet/readContext';
 import { getAddressInfo, setAddressInfo } from './storage';
 
 // Where `utils/dev-harness.js` leaves the wallet it wants unlocked. The harness
@@ -59,10 +60,12 @@ const prepareDevWallet = async () => {
     }
 
     if (config.nodeUrl) {
+      retireReadContext();
       localStorage.setItem("currentNodeUrl", config.nodeUrl);
     }
 
     if (config.chainId) {
+      retireReadContext();
       Zenon.setChainIdentifier(config.chainId);
     }
 
