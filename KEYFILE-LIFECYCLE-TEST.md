@@ -17,6 +17,23 @@ node utils/keyfile-lifecycle-browser-test.js
 
 `SYRIUS_LIFECYCLE_REPORT` is optional. The input defaults to `build/` when `SYRIUS_EXTENSION_DIR` is omitted. Allow several minutes for actual encryption/decryption and the natural five-minute expiry case. The output contains case names, booleans, package/browser identifiers, and network counters; failed runs exit unsuccessfully without dumping evaluated expressions or underlying exception contents.
 
+### Optional minimum-runtime transport
+
+An optional headful transport supports the legacy unpacked-extension loading boundary in Playwright's Chromium revision 1055, version 112.0.5615.29. This is **Chromium**, not a Google Chrome release. Obtain that pinned official browser archive, verify its integrity, and extract it with native `unzip`; the older installer extraction observed during preparation produced a truncated executable. A successful `--version` probe alone does not qualify browser startup or this matrix.
+
+```sh
+CHROMIUM_PATH="/path/to/chromium-112.0.5615.29" \
+SYRIUS_EXTENSION_DIR="/path/to/extracted-production-package" \
+SYRIUS_LIFECYCLE_REPORT="/path/to/minimum-runtime-report.json" \
+node utils/keyfile-lifecycle-minimum-browser-test.js
+```
+
+Use a normal graphical session, or run the same command under `xvfb-run -a` on a compatible Linux runner. The wrapper replaces only the test helper's browser transport before requiring the unchanged fifteen-case fixture. It does not replace the SDK, cryptography, UI or storage implementation. A different reported browser version is rejected with a sanitized error after the owned browser is stopped, before any lifecycle or wallet case. Unsupported startup, protocol or reload stages fail explicitly.
+
+The legacy transport loads the untouched extension through CLI arguments, discovers its identity through the owned extension settings page, and uses actual `chrome.runtime.reload()` with old-context invalidation and the same enabled extension ID. It does not use modern CDP re-registration. CLI-loaded extension worker startup occurs before CDP attachment: the denying proxy exists before process spawn, but post-attachment counters do not certify that earlier interval. Product popup navigation waits for that page's network guards. This startup limit and the Chromium distribution are recorded in sanitized stats/report metadata.
+
+The minimum-runtime procedure is optional and remains unqualified until its complete matrix passes on the reported package and version. The desktop preparation did not reach CDP startup, and Linux execution is pending. The expected combined candidate still includes #15, #23 and #24. Actual Google Chrome minimum-version support, store installation/update permission consent and a real version upgrade remain separate gates.
+
 ## Cases and evidence
 
 | Case | Required observation |
@@ -42,7 +59,7 @@ The expiry case initially requires a finite deadline more than 290 seconds and a
 
 The input package is copied without modifying its files or CSP. The harness compares a file-tree digest before and after use. That digest identifies the tested members; it is not a ZIP checksum, reproducible-build result, or release attestation. Only connection and receive/lock preferences are initialized in application storage. Chrome's developer mode is enabled through its normal profile configuration API solely in the owned disposable profile, and read back before loading the unpacked package; reload also requires the same extension ID to be enabled.
 
-A local denying proxy, CDP request blocking, and offline conditions guard browser targets before product execution. Local HTTP/WebSocket guard checks must fail, and observed external responses or WebSocket handshake responses fail the run. These are browser-level network guards, not an OS firewall or a claim of zero network attempts. No live node, transaction, or user wallet is used.
+A local denying proxy, CDP request blocking, and offline conditions guard browser targets before product execution in the modern transport. The optional legacy transport has the earlier CLI worker-startup boundary described above. Local HTTP/WebSocket guard checks must fail, and observed external responses or WebSocket handshake responses fail the run. These are browser-level network guards, not an OS firewall or a claim of zero network attempts. No live node, transaction, or user wallet is used.
 
 Fresh passwords and UI-generated wallet material stay inside the test process/browser during execution. The harness does not log phrases, passwords, addresses, encrypted keyfiles, raw CDP payloads, DOM dumps, or screenshots. Persistent `localStorage`, `chrome.storage.local`, and `chrome.storage.sync` values are sampled in memory for the known phrase, chosen passwords, and current session entropy. Timed `chrome.storage.session` legitimately contains resumable entropy; the test instead requires its withdrawal on lock and its absence under On close. These checks do not prove absence in every encoding, heap zeroization, forensic erasure, or protection from browser/OS backups and crash recovery.
 

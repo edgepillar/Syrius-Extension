@@ -1,6 +1,6 @@
 'use strict';
 
-// Fork-only Chromium 112 adapter: CLI load in an owned headful browser.
+// Optional Chromium 112 adapter: CLI load in an owned headful browser.
 // Early extension startup precedes CDP attachment; only the denying proxy covers that interval.
 // Never include evaluated expressions, protocol payloads, browser console
 // messages, profile contents or exception descriptions in diagnostics.
@@ -238,6 +238,12 @@ const startBrowser = async ({ extensionDir, profileDir, setupScript = '' }) => {
     const version = await fetch('http://127.0.0.1:' + port + '/json/version', {
       signal: AbortSignal.timeout(5000),
     }).then(response => response.json()).catch(() => { throw failure('BROWSER_ENDPOINT_UNAVAILABLE'); });
+    // Reject a different version before any lifecycle UI or wallet case.
+    // CDP calls Chromium's browser product "Chrome" on some distributions.
+    if (!['Chrome/112.0.5615.29', 'Chromium/112.0.5615.29'].includes(version.Browser)) {
+      await stop();
+      throw failure('BROWSER_VERSION_UNSUPPORTED');
+    }
     if (!version.webSocketDebuggerUrl?.startsWith('ws://127.0.0.1:')) throw failure('BROWSER_ENDPOINT_INVALID');
 
     socket = new WebSocket(version.webSocketDebuggerUrl);
