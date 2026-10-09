@@ -57,6 +57,7 @@ const submit = async input => {
       storeChainIdentifier: value => ({ type: 'chain', payload: value }),
     };
     if (name.endsWith('/utils/chainId')) return chain;
+    if (name.endsWith('/wallet/readContext')) return { retireReadContext: () => {} };
     if (name.endsWith('/utils/notify')) return { notify: {
       error: value => errors.push(value), success: value => success.push(value),
     } };
