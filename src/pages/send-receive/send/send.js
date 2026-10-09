@@ -173,6 +173,7 @@ const Send = () => {
       const review = prepareTransfer({ tokenStandard: selectedToken, amount, recipient, owner: address, balance });
       openModal(
         <AlertModal
+          transaction
           type="confirm"
           title="Confirm send"
           confirmLabel="Send"
