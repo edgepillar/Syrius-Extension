@@ -211,12 +211,16 @@ jobs:
       contents: read
     env:
       SYRIUS_EXPECTED_PACKAGE_VERSION: ${{ needs.build.outputs.manifest_version }}
-      SYRIUS_PACKAGE_DOWNLOAD_DIR: ${{ runner.temp }}/minimum-runtime-download
-      SYRIUS_MINIMUM_PACKAGE_DIR: ${{ runner.temp }}/minimum-runtime-package
-      SYRIUS_MINIMUM_PACKAGE_METADATA: ${{ runner.temp }}/minimum-runtime-package.json
-      SYRIUS_LIFECYCLE_REPORT: ${{ runner.temp }}/minimum-runtime-report.json
 
     steps:
+      - name: Define owned minimum qualification paths
+        shell: bash
+        run: |
+          printf 'SYRIUS_PACKAGE_DOWNLOAD_DIR=%s/minimum-runtime-download\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'SYRIUS_MINIMUM_PACKAGE_DIR=%s/minimum-runtime-package\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'SYRIUS_MINIMUM_PACKAGE_METADATA=%s/minimum-runtime-package.json\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'SYRIUS_LIFECYCLE_REPORT=%s/minimum-runtime-report.json\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+
       - name: Check out exact qualification source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
