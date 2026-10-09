@@ -334,6 +334,27 @@ jobs:
             exit 1
           fi
 
+          if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::The release candidate commit is invalid."
+            exit 1
+          fi
+
+          if ! tag_commit="$(gh api --paginate "repos/$GH_REPO/tags?per_page=100" \
+            --jq 'if type != "array" then error("Invalid tag response") else .[] end | if type != "object" or (.name | type) != "string" or (.name | length) == 0 or (.commit | type) != "object" then error("Invalid tag response") else . end | . as $tag | .commit.sha | if type == "string" and length == 40 and test("^[0-9a-f]+$") then select($tag.name == env.TAG_NAME) else error("Invalid tag commit") end')"; then
+            echo "::error::The remote release tag could not be checked safely."
+            exit 1
+          fi
+
+          if [[ -n "$tag_commit" ]]; then
+            if [[ ! "$tag_commit" =~ ^[0-9a-f]{40}$ || "$tag_commit" != "$TARGET_SHA" ]]; then
+              echo "::error::The remote release tag does not uniquely match the candidate commit."
+              exit 1
+            fi
+          elif [[ "$AUTO_RELEASE" != "true" ]]; then
+            echo "::error::The release tag is missing from the remote repository."
+            exit 1
+          fi
+
           if [[ "$AUTO_RELEASE" == "true" ]]; then
             gh release create "$TAG_NAME" "${assets[@]}" \
               --target "$TARGET_SHA" \

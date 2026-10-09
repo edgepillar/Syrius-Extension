@@ -64,9 +64,9 @@ regression checks, and creates a Chrome/Brave-ready ZIP with a SHA-256
 checksum. The workflow artifact is the ZIP itself, without a second artifact
 archive; the checksum is attached to the GitHub Release.
 
-CI also runs the four native browser fixtures with its installed Chrome or
-Chromium. Locally, set CHROMIUM_PATH to your browser executable and run
-npm run test:browser. These checks use disposable profiles and synthetic data;
+CI also runs the native browser fixtures registered in package.json with its
+installed Chrome or Chromium. Locally, set CHROMIUM_PATH to your browser executable
+and run npm run test:browser. These checks use disposable profiles and synthetic data;
 they do not contact a Zenon network or qualify real wallet encryption.
 
 Download the ZIP and its .sha256 file into the same directory. On systems with
