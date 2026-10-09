@@ -9,6 +9,7 @@ on:
       - development
       - manifest-v3
       - codex/qualify-2026-10-08
+      - codex/qualify-keyfiles-2026-10-09
     tags:
       - 'v*'
   workflow_dispatch:
@@ -124,6 +125,28 @@ jobs:
 
       - name: Build production extension
         run: npm run build
+
+      - name: Qualify production keyfile lifecycle
+        id: keyfiles
+        timeout-minutes: 15
+        shell: bash
+        run: |
+          browser_path="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+          test -n "$browser_path"
+          "$browser_path" --version
+          CHROMIUM_PATH="$browser_path" \
+            SYRIUS_EXTENSION_DIR="$PWD/build" \
+            SYRIUS_LIFECYCLE_REPORT="$RUNNER_TEMP/syrius-keyfile-lifecycle-report.json" \
+            node utils/keyfile-lifecycle-browser-test.js
+
+      - name: Upload sanitized keyfile lifecycle report
+        if: always() && (steps.keyfiles.outcome == 'success' || steps.keyfiles.outcome == 'failure')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          path: ${{ runner.temp }}/syrius-keyfile-lifecycle-report.json
+          if-no-files-found: error
+          retention-days: 30
+          archive: false
 
       - name: Validate and package production build
         id: package
