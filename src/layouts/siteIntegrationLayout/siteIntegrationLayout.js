@@ -79,7 +79,7 @@ const SiteHeader = ({ request }) => (
       <div className="site-favicon site-favicon-blank" />
     )}
     <div className="site-header-text">
-      <div className="site-host approval-origin">{typeof request.origin === 'string' && request.origin ? request.origin : 'Unknown site'}</div>
+      <div id="approval-origin" className="site-host approval-origin">{typeof request.origin === 'string' && request.origin ? request.origin : 'Unknown site'}</div>
       {typeof request.origin === 'string' && request.origin.startsWith('http:') && (
         <div className="approval-warning" role="alert">This site uses an insecure HTTP connection.</div>
       )}
@@ -106,6 +106,15 @@ const SiteIntegrationLayout = () => {
   const [preview, setPreview] = useState(null);
   const [isBusy, setIsBusy] = useState(false);
   const [isWaitingForMore, setIsWaitingForMore] = useState(false);
+  const reviewIdentity = identityOf(request).snapshot;
+  // A replacement can reuse the same Confirm/Sign DOM button. Return to the
+  // review context before it paints, without moving focus on same-request reads.
+  const focusReview = useCallback((element) => {
+    if (!element || !reviewIdentity) return;
+    element.scrollTop = 0;
+    element.querySelectorAll('.approval-body').forEach(body => { body.scrollTop = 0; });
+    element.focus();
+  }, [reviewIdentity]);
   const rendered = useRef(null), operation = useRef(null), discarded = useRef(null), mounted = useRef(true), previewOwner = useRef(null);
   rendered.current = { request, address, isUnlocked, chainIdentifier, nodeUrl };
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
@@ -416,7 +425,7 @@ const SiteIntegrationLayout = () => {
   })();
 
   return (
-    <div className="page approval-screen">
+    <div className="page approval-screen" role="region" aria-labelledby="approval-origin approval-title" tabIndex={-1} ref={focusReview}>
       <SiteHeader request={request} />
       <div className="approval-body">
         <strong>{request.binding.scope.walletName} · Account {request.binding.scope.index + 1}</strong>
@@ -428,7 +437,7 @@ const SiteIntegrationLayout = () => {
       {request.type === 'connect' && (
         <>
           <div className="approval-body">
-            <h2 className="approval-title">Connect this wallet?</h2>
+            <h2 id="approval-title" className="approval-title">Connect this wallet?</h2>
             <p className="approval-note">
               {hostOf(request.origin)} will be able to see your address, the
               chain you are signing for and your node host. Private endpoint
@@ -470,7 +479,7 @@ const SiteIntegrationLayout = () => {
       {request.type === 'sendTransaction' && (
         <>
           <div className="approval-body">
-            <h2 className="approval-title">Confirm transfer</h2>
+            <h2 id="approval-title" className="approval-title">Confirm transfer</h2>
             <TransactionNetwork chainIdentifier={chainIdentifier} nodeUrl={nodeUrl} />
 
             {(() => {
@@ -517,7 +526,7 @@ const SiteIntegrationLayout = () => {
       {request.type === 'signMessage' && (
         <>
           <div className="approval-body">
-            <h2 className="approval-title">Sign this message?</h2>
+            <h2 id="approval-title" className="approval-title">Sign this message?</h2>
             <p className="approval-note">
               A signature proves this address is yours. It moves nothing, costs
               no plasma and is never published — but only sign what you can
@@ -558,7 +567,7 @@ const SiteIntegrationLayout = () => {
       {request.type === 'signAndSendBlock' && (
         <>
           <div className="approval-body">
-            <h2 className="approval-title">Sign this block?</h2>
+            <h2 id="approval-title" className="approval-title">Sign this block?</h2>
             <TransactionNetwork chainIdentifier={chainIdentifier}
               nodeUrl={blockApproval?.nodeUrl ?? nodeUrl} effectiveChainIdentifier={preparedBlock?.chainIdentifier} />
 
