@@ -20,6 +20,11 @@ const files = [
   'src/components/modals/alert-modal.js',
   'src/assets/close-icon.svg',
 ];
+// Combined candidates can add transaction context to the alert. Keep those
+// actual presentation imports intact while retaining the base-checkout test.
+const transactionNetwork = 'src/components/transaction-network/transaction-network.js';
+const hasTransactionNetwork = fs.existsSync(path.join(root, transactionNetwork));
+if (hasTransactionNetwork) files.push(transactionNetwork, 'src/services/utils/publicNodeUrl.js');
 for (const file of files) {
   const output = path.join(extension, file);
   fs.mkdirSync(path.dirname(output), { recursive: true });
@@ -34,24 +39,28 @@ fs.writeFileSync(path.join(extension, 'page.html'), '<!doctype html><meta charse
 fs.writeFileSync(path.join(extension, 'entry.jsx'), `
 import React, {useCallback} from 'react';
 import {createRoot} from 'react-dom/client';
+import {Provider} from 'react-redux';
 import Modal from './src/services/hooks/modal/modal';
 import {ModalContext} from './src/services/hooks/modal/modalContext';
 import useModal from './src/services/hooks/modal/useModal';
 import AlertModal from './src/components/modals/alert-modal';
 const counts={closed:0,dismissed:0,confirmed:0,background:0};
-window.fixture={counts};
+const fixtureState={connectionParameters:{chainIdentifier:69,nodeUrl:'wss://fixture-user:fixture-value@node.fixture.invalid:35998/private-route?fixture=hidden#detail'}};
+const store={getState:()=>fixtureState,subscribe:()=>()=>{},dispatch:()=>{}};
+window.fixture={counts,hasTransactionNetwork:${hasTransactionNetwork}};
 const Fixture=()=>{
   const model=useModal();
   const close=useCallback(()=>{counts.closed++;model.closeModal();},[model.closeModal]);
-  const alert=title=><AlertModal title={title} onDismiss={()=>counts.dismissed++} onSuccess={()=>counts.confirmed++}><p>Review this synthetic action before choosing.</p></AlertModal>;
+  const alert=(title,transaction=false)=><AlertModal title={title} transaction={transaction} onDismiss={()=>counts.dismissed++} onSuccess={()=>counts.confirmed++}><p>Review this synthetic action before choosing.</p></AlertModal>;
   const show=(kind='alert',title='Confirm this synthetic action')=>{
     if(kind==='generic')model.openModal(<div>Read this synthetic message.</div>);
     else if(kind==='single')model.openModal(<div title={title}><button id="single-action" onClick={()=>counts.confirmed++}>Confirm</button></div>);
     else if(kind==='disabled')model.openModal(<div title={title}><button disabled>Disabled</button><button hidden>Hidden</button><fieldset disabled><button>Disabled by fieldset</button></fieldset><span inert=""><button>Inert</button></span><button style={{visibility:'hidden'}}>Invisible</button></div>);
+    else if(kind==='transaction')model.openModal(alert(title,true));
     else model.openModal(alert(title));
   };
   Object.assign(window.fixture,{show,replace:()=>model.openModal(alert('Replacement synthetic action'))});
-  return <ModalContext.Provider value={{...model,closeModal:close}}><Modal /></ModalContext.Provider>;
+  return <Provider store={store}><ModalContext.Provider value={{...model,closeModal:close}}><Modal /></ModalContext.Provider></Provider>;
 };
 const reactRoot=createRoot(document.querySelector('#fixture-root'));
 reactRoot.render(<Fixture />);
@@ -195,6 +204,17 @@ const watchdog = setTimeout(() => {
   assert.equal(await evaluate('document.activeElement.textContent.trim()'), 'Cancel');
   await key('Tab', true); assert.equal(await evaluate('document.activeElement.textContent.trim()'), 'Confirm');
   await key('Escape'); await closed();
+  if (hasTransactionNetwork) {
+    await show('transaction', 'Synthetic transaction context');
+    await until("Boolean(document.querySelector('.transaction-network'))");
+    const details = await evaluate("document.querySelector('.transaction-network').textContent");
+    assert(details.includes('Selected signing chain69'));
+    assert(details.includes('wss://node.fixture.invalid:35998'));
+    for (const privatePart of ['fixture-user', 'fixture-value', '/private-route', 'fixture=hidden', '#detail']) assert(!details.includes(privatePart));
+    assert.equal(await active(), 'close-modal');
+    await key('Tab'); await key('Tab'); await key('Tab'); assert.equal(await active(), 'close-modal');
+    await key('Escape'); await closed();
+  }
   await show(); await evaluate("document.querySelector('#trigger').remove()"); await key('Escape');
   await until("!document.querySelector('[role=dialog]')");
   assert.equal(await evaluate('document.activeElement.tagName'), 'BODY');
@@ -208,7 +228,7 @@ const watchdog = setTimeout(() => {
     escapeAndBackdropPreserveCloseOnlySemantics: true, closeCancelConfirmCallbacksOnce: true,
     originalTriggerRestoredAfterContentReplacement: true, noFocusableAndDisabledContentContained: true,
     initialEnterDoesNotConfirmSingleAction: true, detachedTriggerHandled: true, unmountRestoresConnectedTrigger: true,
-    simpleDialogFits360x400: true, runtimeErrors };
+    simpleDialogFits360x400: true, transactionDisplayFromCurrentSource: hasTransactionNetwork, runtimeErrors };
 })().catch(error => { console.error(error.message || 'Native modal focus checks failed.'); process.exitCode = 1; }).finally(async () => {
   if (cdp) await cdp('Browser.close').catch(() => {});
   socket?.close(); browser?.kill();
