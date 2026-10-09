@@ -38,14 +38,33 @@ const privateToken = () => {
 // active document (nativeNavigation.capture). Sent at once, its first read
 // failed with "the requesting document has left", and its hello, which is
 // sent at load and not again, never registered it for events. So both wait
-// for activation. Callers re-check `document.prerendering`: the page can
+// for activation, after bounded admission. One removable listener drains all
+// deferred entries; it re-checks `document.prerendering` because the page can
 // dispatch a `prerenderingchange` of its own.
-const afterActivation = run => document.addEventListener('prerenderingchange', run, { once: true });
 let active = Boolean(document.documentElement);
 let activation = privateToken();
 let legacyCounter = 0;
 let activeTransports = 0;
 const outstanding = new Map();
+let watchingActivation = false;
+let waitingHello = false;
+const stopWatchingActivation = () => {
+  if (!watchingActivation) return;
+  document.removeEventListener('prerenderingchange', activate);
+  watchingActivation = false;
+};
+const watchActivation = () => {
+  if (watchingActivation) return;
+  document.addEventListener('prerenderingchange', activate);
+  watchingActivation = true;
+};
+const activate = () => {
+  lifetime.check();
+  if (!active || document.prerendering) return;
+  stopWatchingActivation();
+  if (waitingHello) { waitingHello = false; hello(); }
+  for (const [token, entry] of outstanding) if (entry.deferred) dispatch(token);
+};
 const approvalMethods = new Set(['znn_connect', 'znn_sendTransaction', 'znn_signAndSendBlock', 'znn_sign']);
 const transportError = message => ({ code: 4900, message });
 // An approval lasts up to its 30-minute deadline; one more minute lets the
@@ -97,25 +116,44 @@ const sendToBackground = (message, requestToken) => {
   }
 };
 const begin = (entry) => {
-  if (document.prerendering) { afterActivation(() => begin(entry)); return; }
   lifetime.check();
   if (!active || (entry.activation && entry.activation !== activation)) {
     entry.resolve?.(null);
     return;
   }
-  if (outstanding.size >= limits.activeHandlers) {
+  try {
+    validateEnvelope(entry);
+    if (outstanding.size >= limits.activeHandlers || activeTransports >= limits.activeHandlers) throw busy();
+  } catch (error) {
     if (entry.kind === 'value') entry.resolve(null);
-    else if (entry.kind === 'legacy') postToPage(entry.legacy.onError(busy()));
+    else if (entry.kind === 'legacy') postToPage(entry.legacy.onError(error));
     // An invalid correlation ID is not echoed back to the page.
-    else if (validResponseId(entry.id)) postToPage({ target: inpageTarget, kind: 'response', id: entry.id, error: { code: busy().code, message: busy().message } });
+    else if (validResponseId(entry.id)) postToPage({ target: inpageTarget, kind: 'response', id: entry.id, error: { code: error.code, message: error.message } });
     return;
   }
   const requestToken = privateToken();
-  const current = { ...entry, activation };
-  outstanding.set(requestToken, current);
   const timeout = entry.kind === 'value' ? 10000 : approvalMethods.has(entry.method) ? approvalFallbackMs : 30000;
-  current.timer = setTimeout(() => settle(requestToken, { error: transportError(approvalMethods.has(entry.method)
-    ? 'The wallet did not finish. Verify the outcome before retrying.' : 'The wallet did not respond') }), timeout);
+  const current = { ...entry, activation, deferred: Boolean(document.prerendering), deadline: Date.now() + timeout };
+  outstanding.set(requestToken, current);
+  // The existing transport budget starts at admission, so an unopened page
+  // cannot retain requests indefinitely. The worker's approval TTL is unchanged.
+  current.timer = setTimeout(() => expire(requestToken), timeout);
+  if (current.deferred) watchActivation();
+  else dispatch(requestToken);
+};
+const expire = requestToken => {
+  const entry = outstanding.get(requestToken);
+  if (!entry) return;
+  settle(requestToken, { error: transportError(entry.deferred
+    ? 'The prerendered page was not activated in time. Make a new request after opening it.'
+    : approvalMethods.has(entry.method) ? 'The wallet did not finish. Verify the outcome before retrying.' : 'The wallet did not respond') });
+};
+const dispatch = requestToken => {
+  const entry = outstanding.get(requestToken);
+  if (!active || !entry || entry.activation !== activation || document.prerendering) return;
+  // A delayed activation task cannot dispatch an entry whose timer is overdue.
+  if (Date.now() >= entry.deadline) { expire(requestToken); return; }
+  entry.deferred = false;
   sendToBackground({ channel: 'znn', kind: 'request', id: entry.id, method: entry.method,
     params: entry.params, activation, requestToken }, requestToken);
 };
@@ -143,6 +181,7 @@ const settle = (requestToken, message) => {
   if (!active || !entry || entry.activation !== activation) return false;
   outstanding.delete(requestToken);
   clearTimeout(entry.timer);
+  if (!waitingHello && ![...outstanding.values()].some(item => item.deferred)) stopWatchingActivation();
   if (entry.kind === 'value') entry.resolve(message.error ? null : message.result);
   else if (entry.kind === 'legacy') publishLegacy(entry, message).catch(() => {});
   else postToPage({ target: inpageTarget, kind: 'response', id: entry.id, result: message.result, error: message.error,
@@ -212,10 +251,13 @@ const leave = () => {
     if (entry.kind === 'value') entry.resolve(null);
   }
   outstanding.clear();
+  waitingHello = false;
+  stopWatchingActivation();
   sendToBackground({ channel: 'znn', kind: 'bye', activation: departed });
 };
 const hello = () => {
-  if (document.prerendering) { afterActivation(hello); return; }
+  if (!active) return;
+  if (document.prerendering) { waitingHello = true; watchActivation(); return; }
   sendToBackground({ channel: 'znn', kind: 'hello', activation });
 };
 const enter = event => {
