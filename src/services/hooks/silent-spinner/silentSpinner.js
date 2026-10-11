@@ -15,7 +15,6 @@ const SilentSpinner = () => {
   return ReactDOM.createPortal(
     <div className="pow-spinner-container" role="status" aria-label={silentSpinnerContent || 'Working…'} title={silentSpinnerContent}>
       <img alt="" src={require('./../../../assets/spinner.svg')} className="pow-spinner" />
-      <span className="pow-spinner-content" aria-hidden="true">Working…</span>
     </div>,
     root
   );
