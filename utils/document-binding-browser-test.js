@@ -35,10 +35,13 @@ const files = closure('src/sections/Background/index.js');
 const scope = { walletName: 'fixture', walletId: 'inert-approved-account', address: 'inert-approved-account', index: 0 };
 const binding = { id: 'fixture-selection', ownerId: 'owner', scope };
 const scheduler = `// Fixture-only storage scheduler; the imported application modules are unchanged.
-let permissionGate; const nativeSet=chrome.storage.local.set.bind(chrome.storage.local);
+let permissionGate,prerenderTail=Promise.resolve(); const nativeSet=chrome.storage.local.set.bind(chrome.storage.local);
 chrome.storage.local.set=async values=>{if(permissionGate&&values['syrius.permissions']?.entries?.some(entry=>entry.pendingApproval)){
 const gate=permissionGate;gate.entered=true;await gate.wait;permissionGate=null;}return nativeSet(values);};
-chrome.runtime.onMessage.addListener((message,sender,reply)=>{if(message.channel!=='fixture'||sender.url!==chrome.runtime.getURL('control.html'))return false;
+chrome.runtime.onMessage.addListener((message,sender,reply)=>{if(message.channel==='znn'&&message.kind==='request'&&typeof message.id==='string'&&message.id.startsWith('prerender-direct-'))
+prerenderTail=prerenderTail.then(async()=>{const key='fixture.prerenderRequests',ids=(await chrome.storage.session.get(key))[key]||[];await chrome.storage.session.set({[key]:[...ids,message.id]});});
+if(message.channel!=='fixture'||sender.url!==chrome.runtime.getURL('control.html'))return false;
+if(message.method==='prerenderRequests'){prerenderTail.then(async()=>reply((await chrome.storage.session.get('fixture.prerenderRequests'))['fixture.prerenderRequests']||[]));return true;}
 if(message.method==='hold'){let release;const wait=new Promise(resolve=>{release=resolve;});permissionGate={wait,release,entered:false};reply(true);}
 if(message.method==='entered')reply(Boolean(permissionGate?.entered));if(message.method==='release'){permissionGate?.release();reply(true);}return false;});
 `;
@@ -75,11 +78,24 @@ const watchdog = setTimeout(() => { console.error('Native document fixture timed
 (async () => {
   // A launching page that prerenders /prerendered and opens it a moment later,
   // and that page, which reads and listens at load like a dApp does.
+  const launch = (target, after = '', delay = 2000) => '<!doctype html><title>Inert prerender launcher</title><script id="rules" type="speculationrules">{"prerender":[{"source":"list","urls":["' + target + '"],"eagerness":"immediate"}]}</script><a id="go" href="' + target + '">Open</a><script>setTimeout(()=>{' + (after || 'document.getElementById("go").click()') + '},' + delay + ')</script>';
+  const reports = new Map();
   const prerenderPages = {
     '/launch': '<!doctype html><title>Inert prerender launcher</title><script type="speculationrules">{"prerender":[{"source":"list","urls":["/prerendered"],"eagerness":"immediate"}]}</script><a id="go" href="/prerendered">Open</a><script>setTimeout(()=>document.getElementById("go").click(),1500)</script>',
     '/prerendered': '<!doctype html><title>Inert prerendered page</title><script>window.prerenderLog=[{prerendering:document.prerendering}];zenon.getAccounts().then(value=>prerenderLog.push({accounts:value}),error=>prerenderLog.push({error:error.code}));zenon.on("accountsChanged",value=>prerenderLog.push({event:value}));</script>',
+    '/launch-admission': launch('/prerender-admission'),
+    '/prerender-admission': '<!doctype html><title>Inert prerender admission</title><script>window.admissionLog={prerendering:document.prerendering,replies:[]};addEventListener("message",e=>{if(e.source===window&&e.data?.target==="znn-inpage"&&e.data.kind==="response")admissionLog.replies.push({id:e.data.id,error:e.data.error?.code,result:e.data.result});});postMessage({target:"znn-contentscript",kind:"request",id:"prerender-direct-invalid",method:"znn_sign",params:{message:"x".repeat(128*1024)}},location.origin);for(let i=0;i<64;i++)postMessage({target:"znn-contentscript",kind:"request",id:"prerender-direct-"+i,method:"znn_accounts",params:{}},location.origin);setTimeout(()=>fetch("/report-admission",{method:"POST",body:JSON.stringify(admissionLog)}),200);</script>',
+    '/launch-cancel': launch('/prerender-cancel', 'document.getElementById("rules").remove();fetch("/report-cancelled",{method:"POST",body:"true"})'),
+    '/prerender-cancel': '<!doctype html><title>Inert cancelled prerender</title><script>window.cancelLog={prerendering:document.prerendering};zenon.getAccounts().catch(()=>{});postMessage({target:"znn-contentscript",kind:"request",id:"prerender-direct-cancelled",method:"znn_accounts",params:{}},location.origin);fetch("/report-cancel-ready",{method:"POST",body:JSON.stringify(cancelLog)});</script>',
+    '/launch-expiry': launch('/prerender-expiry', '', 32000),
+    '/prerender-expiry': '<!doctype html><title>Inert expired prerender</title><script>window.expiryLog={prerendering:document.prerendering,replies:[],providerError:null};addEventListener("message",e=>{if(e.source===window&&e.data?.target==="znn-inpage"&&e.data.kind==="response")expiryLog.replies.push({id:e.data.id,error:e.data.error?.code});});zenon.getAccounts().then(()=>expiryLog.providerError="unexpected-success",error=>expiryLog.providerError=error.code);postMessage({target:"znn-contentscript",kind:"request",id:"prerender-direct-expired",method:"znn_accounts",params:{}},location.origin);fetch("/report-expiry-ready",{method:"POST",body:JSON.stringify({prerendering:document.prerendering})});</script>',
   };
   server = http.createServer((request, response) => {
+    if (request.url.startsWith('/report-')) {
+      let body = ''; request.on('data', chunk => { body += chunk; });
+      request.on('end', () => { reports.set(request.url, JSON.parse(body)); response.writeHead(204); response.end(); });
+      return;
+    }
     if (request.url === '/nocontent') { response.writeHead(204); response.end(); return; }
     response.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'max-age=300' });
     if (Object.hasOwn(prerenderPages, request.url)) { response.end(prerenderPages[request.url]); return; }
@@ -108,7 +124,7 @@ const watchdog = setTimeout(() => { console.error('Native document fixture timed
   cdp = (method, params = {}, sessionId) => new Promise((resolve, reject) => { const next = ++id; pending.set(next, { resolve, reject }); socket.send(JSON.stringify({ id: next, method, params, ...(sessionId ? { sessionId } : {}) })); });
   const open = async url => { const target = await cdp('Target.createTarget', { url }); return { ...target, ...await cdp('Target.attachToTarget', { targetId: target.targetId, flatten: true }) }; };
   const evaluate = async (page, expression) => { const result = await cdp('Runtime.evaluate', { expression: '(async()=>(' + expression + '))()', awaitPromise: true, returnByValue: true }, page.sessionId); if (result.exceptionDetails) throw Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text); return result.result.value; };
-  const eventually = async (read, predicate, label) => { for (let i = 0; i < 120; i++) { const value = await read(); if (predicate(value)) return value; await sleep(40); } throw Error('Timed out: ' + label); };
+  const eventually = async (read, predicate, label, attempts = 120) => { for (let i = 0; i < attempts; i++) { const value = await read(); if (predicate(value)) return value; await sleep(40); } throw Error('Timed out: ' + label); };
   const loaded = await cdp('Extensions.loadUnpacked', { path: extension });
   const control = await open(`chrome-extension://${loaded.id}/control.html`);
   await eventually(() => evaluate(control, 'typeof internal'), v => v === 'function', 'control ready');
@@ -140,6 +156,15 @@ const watchdog = setTimeout(() => { console.error('Native document fixture timed
   assert.equal(await evaluate(page, 'isSecureContext'), false);
   assert.equal(await evaluate(page, 'typeof crypto.randomUUID'), 'undefined');
   assert.deepEqual(await evaluate(page, 'zenon.getAccounts().catch(error=>({failure:error}))'), []);
+  // Native postMessage accepted data-only class instances and plain objects
+  // from another same-origin realm. Pre-retention validation keeps that API
+  // boundary and returns a sanitized error for uncloneable parameters.
+  assert.deepEqual(await evaluate(page, `(()=>{const frame=document.createElement('iframe');document.body.appendChild(frame);
+    const foreign=new frame.contentWindow.Object();foreign.nested=new frame.contentWindow.Object();foreign.nested.amount='1';
+    class DataOnly{constructor(){this.nested={label:'inert'};}}
+    return zenon.request({method:'znn_accounts',params:{foreign,instance:new DataOnly()}}).finally(()=>frame.remove());})()`), []);
+  const uncloneable = await evaluate(page, "zenon.request({method:'znn_accounts',params:{callback(){}}}).then(()=>({unexpected:true}),error=>({code:error.code,message:error.message}))");
+  assert.deepEqual(uncloneable, { code: -32602, message: 'Wallet request parameters could not be copied safely.' });
   await begin(page); const first = await waitRequest(); assert.equal(first.frameId, 0);
   assert.equal(await current(first), true);
   // Opening an approval changes focus but must not expire its request.
@@ -282,10 +307,10 @@ const watchdog = setTimeout(() => { console.error('Native document fixture timed
   // activation, so once opened it reads the connected account and gets events.
   // Chrome does not prerender under DevTools: the tab stays unattached until
   // it has moved to the prerendered page.
-  const launch = await cdp('Target.createTarget', { url: bOrigin + '/launch' });
-  await eventually(async () => (await cdp('Target.getTargets')).targetInfos.find(t => t.targetId === launch.targetId)?.url,
+  const prerenderLaunch = await cdp('Target.createTarget', { url: bOrigin + '/launch' });
+  await eventually(async () => (await cdp('Target.getTargets')).targetInfos.find(t => t.targetId === prerenderLaunch.targetId)?.url,
     url => url === bOrigin + '/prerendered', 'prerendered page opened');
-  const prerendered = { ...launch, ...await cdp('Target.attachToTarget', { targetId: launch.targetId, flatten: true }) };
+  const prerendered = { ...prerenderLaunch, ...await cdp('Target.attachToTarget', { targetId: prerenderLaunch.targetId, flatten: true }) };
   assert(await evaluate(prerendered, 'performance.getEntriesByType("navigation")[0].activationStart') > 0, 'This browser must exercise prerendering');
   await eventually(() => evaluate(prerendered, 'prerenderLog'), log => log?.length === 2, 'prerendered read');
   assert.deepEqual(await evaluate(prerendered, 'prerenderLog'), [{ prerendering: true }, { accounts: ['inert-approved-account'] }]);
@@ -295,13 +320,52 @@ const watchdog = setTimeout(() => { console.error('Native document fixture timed
     return (await evaluate(prerendered, 'prerenderLog')).slice(2);
   }, events => events.length > 0, 'prerendered page event');
   assert.deepEqual([...new Set(prerenderEvents.map(JSON.stringify))], [JSON.stringify({ event: ['inert-approved-account'] })]);
-  await cdp('Target.closeTarget', { targetId: launch.targetId });
+  await cdp('Target.closeTarget', { targetId: prerenderLaunch.targetId });
+  // Direct messages bypass the public provider. Native prerendering must
+  // reject invalid/excess envelopes before activation and dispatch only the
+  // bounded admitted reads once the document is actually shown.
+  const admissionLaunch = await cdp('Target.createTarget', { url: bOrigin + '/launch-admission' });
+  const beforeActivation = await eventually(async () => reports.get('/report-admission'), value => Boolean(value), 'prerender admission report');
+  assert.equal(beforeActivation.prerendering, true);
+  assert.equal(beforeActivation.replies.filter(reply => reply.error === -32602).length, 1);
+  assert.equal(beforeActivation.replies.filter(reply => reply.error === -32005).length, 32);
+  assert.equal((await evaluate(control, 'fixture("prerenderRequests")')).length, 0);
+  await eventually(async () => (await cdp('Target.getTargets')).targetInfos.find(t => t.targetId === admissionLaunch.targetId)?.url,
+    url => url === bOrigin + '/prerender-admission', 'bounded prerender activated');
+  const admission = { ...admissionLaunch, ...await cdp('Target.attachToTarget', { targetId: admissionLaunch.targetId, flatten: true }) };
+  assert(await evaluate(admission, 'performance.getEntriesByType("navigation")[0].activationStart') > 0);
+  const admissionLog = await eventually(() => evaluate(admission, 'admissionLog'), value => value.replies.length === 65, 'bounded prerender replies');
+  assert.equal(admissionLog.replies.filter(reply => Array.isArray(reply.result)).length, 32);
+  assert.equal((await evaluate(control, 'fixture("prerenderRequests")')).length, 32);
+  await cdp('Target.closeTarget', { targetId: admissionLaunch.targetId });
+  // Cancelling the browser's speculation rules discards a deferred provider
+  // read and a direct message without either reaching the actual worker.
+  const cancelLaunch = await cdp('Target.createTarget', { url: bOrigin + '/launch-cancel' });
+  const cancelledPage = await eventually(async () => reports.get('/report-cancel-ready'), value => Boolean(value), 'native cancelled prerender ready');
+  assert.equal(cancelledPage.prerendering, true);
+  await eventually(async () => reports.get('/report-cancelled'), value => value === true, 'native prerender cancelled');
+  assert.equal((await evaluate(control, 'fixture("prerenderRequests")')).length, 32);
+  await cdp('Target.closeTarget', { targetId: cancelLaunch.targetId });
+  // Natural transport expiry also bounds an unopened native prerender. No
+  // clock is changed: the browser activates it after the existing 30s budget.
+  const expiryLaunch = await cdp('Target.createTarget', { url: bOrigin + '/launch-expiry' });
+  const expiryPage = await eventually(async () => reports.get('/report-expiry-ready'), value => Boolean(value), 'native expiry prerender ready');
+  assert.equal(expiryPage.prerendering, true);
+  await eventually(async () => (await cdp('Target.getTargets')).targetInfos.find(t => t.targetId === expiryLaunch.targetId)?.url,
+    url => url === bOrigin + '/prerender-expiry', 'expired prerender activated', 1000);
+  const expired = { ...expiryLaunch, ...await cdp('Target.attachToTarget', { targetId: expiryLaunch.targetId, flatten: true }) };
+  assert(await evaluate(expired, 'performance.getEntriesByType("navigation")[0].activationStart') > 0);
+  const expiryLog = await eventually(() => evaluate(expired, 'expiryLog'), value => value.providerError !== null && value.replies.length === 1, 'expired prerender replies');
+  assert.equal(expiryLog.providerError, 4900);
+  assert.deepEqual(expiryLog.replies, [{ id: 'prerender-direct-expired', error: 4900 }]);
+  assert.equal((await evaluate(control, 'fixture("prerenderRequests")')).length, 32);
+  await cdp('Target.closeTarget', { targetId: expiryLaunch.targetId });
   await internal('permissions.revokeAll');
   await begin(second); const closing = await waitRequest();
   await cdp('Target.closeTarget', { targetId: second.targetId });
   await eventually(() => evaluate(control, "records('znn.pendingRequests')"), value => !Object.values(value || {}).some(r => r.tabId === closing.tabId), 'tab close cleanup');
   const result = { browser: version.Browser, actualModules: [...new Set([...files, ...closure('src/sections/Content/index.js'), ...closure('src/sections/Inpage/index.js')])], nonSecureHttp: true, lifecycleCaptureOrdering: true, nativeNavigationFence: true, documentRewriteRecovery: true, subframeRewriteRecovery: true, emptyRewriteRecovery: true, ordinaryBodyEdits: true, sameOriginNavigation: true,
-    crossOriginNavigation: true, nativeSubframeNavigation: true, bfcacheRestored: restored, oldApprovalsCancelled: true, freshRequestsAndEvents: true, multiKeyParamsIdentity: true, independentLegacyTabs: true, provisionalGrantCancellation: true, completedConsentSurvivesNavigation: true, abortedNavigationKeepsEvents: true, prerenderedPageReadsAndEvents: true, tabCloseCleanup: true };
+    crossOriginNavigation: true, nativeSubframeNavigation: true, bfcacheRestored: restored, oldApprovalsCancelled: true, freshRequestsAndEvents: true, multiKeyParamsIdentity: true, independentLegacyTabs: true, provisionalGrantCancellation: true, completedConsentSurvivesNavigation: true, abortedNavigationKeepsEvents: true, prerenderedPageReadsAndEvents: true, prerenderDirectAdmission: true, prerenderCancellation: true, prerenderNaturalExpiry: true, structuredCloneProviderInputs: true, tabCloseCleanup: true };
   fs.writeFileSync(path.join(dir, 'result.json'), JSON.stringify(result, null, 2));
   console.log(JSON.stringify({ ...result, artifact: path.join(dir, 'result.json') }));
 })().catch(error => { console.error(error.stack || String(error)); process.exitCode = 1; }).finally(async () => {

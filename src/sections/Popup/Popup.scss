@@ -78,6 +78,7 @@ body {
 // the screen is clipped away with the viewport's overflow hidden, so it cannot
 // be scrolled to either. Fit the window that exists instead.
 body.standalone-window {
+  width: 100%;
   height: 100vh;
 }
 
@@ -1824,6 +1825,15 @@ button:disabled {
   white-space: nowrap;
 }
 
+// Approval authority must remain readable in the narrow popup. Unlike the
+// compact connected-site list, the full scheme, host and port are never elided.
+.site-host.approval-origin {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .site-origin,
 .site-title {
   color: var(--text-faint);
@@ -1839,20 +1849,42 @@ button:disabled {
 .approval-screen {
   height: 100%;
   padding: 16px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+
+  // Long origins and review data must remain reachable at narrow/zoomed sizes.
+  // Focus scrolls actions into view after the complete review.
+  > .site-header,
+  > .approval-note {
+    flex: 0 0 auto;
+  }
+
+  // Keep actions in normal flow so they cannot cover preview text.
+  > .sticky-actions {
+    flex: 0 0 auto;
+    background: var(--bg);
+    padding: 8px 0;
+  }
+
+  .action-row .button {
+    min-width: 0;
+    white-space: normal;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--znn-dim);
+    outline-offset: -3px;
+  }
 }
 
-// What is being approved scrolls; the choice about it does not. The block
-// preview is capped, but the site header, the note and a shortfall warning can
-// still outgrow a short window between them, and this screen must never be
-// able to show a request it gives you no way to answer.
+// The screen owns scrolling so the site header and every review section stay
+// reachable even when a long origin alone outgrows a short window.
 .approval-body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
 }
 
 .site-header {
@@ -2003,6 +2035,12 @@ button:disabled {
   .block-preview {
     margin-top: 8px;
   }
+}
+
+.message-preview:focus-visible,
+.block-preview:focus-visible {
+  outline: 2px solid var(--znn-dim);
+  outline-offset: -2px;
 }
 
 //

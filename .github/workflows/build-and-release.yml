@@ -91,14 +91,59 @@ jobs:
       - name: Lint source
         run: npm run lint
 
+      - name: Check out pinned embedded ABI source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: zenon-network/go-zenon
+          ref: 667a69d9e9a418edf7580b08492ba5dcb9efd63a
+          path: .test-fixtures/go-zenon
+          sparse-checkout: vm/embedded/definition
+          persist-credentials: false
+
       - name: Run focused regression tests
+        env:
+          GO_ZENON_ABI_DIR: .test-fixtures/go-zenon/vm/embedded/definition
         run: npm test
+
+      - name: Check validation failure paths
+        env:
+          GO_ZENON_ABI_DIR: .test-fixtures/go-zenon/vm/embedded/definition
+        run: node --test utils/validation-gates-test.js
+
+      - name: Check release publication failure paths
+        run: node --test utils/release-assets-test.js
+
+      # The build refuses to package when a pinned notice source drifts; this
+      # is the check that the refusal itself still works.
+      - name: Check third-party notice generation
+        run: node utils/third-party-readme-notices-test.js
 
       - name: Run dependency security regression tests
         run: npm run test:security
 
+      - name: Run native browser regression tests
+        shell: bash
+        run: |
+          browser_path="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+          test -n "$browser_path"
+          "$browser_path" --version
+          CHROMIUM_PATH="$browser_path" npm run test:browser
+
       - name: Build production extension
         run: npm run build
+
+      # Every other browser fixture substitutes the SDK boundary, which is how
+      # wallet removal stayed broken in production builds while they all passed.
+      # This one drives the package just built, with its real Argon2/AES path,
+      # and includes an unshortened five-minute session expiry.
+      - name: Check production keyfile lifecycle
+        timeout-minutes: 15
+        shell: bash
+        run: |
+          browser_path="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+          test -n "$browser_path"
+          CHROMIUM_PATH="$browser_path" SYRIUS_EXTENSION_DIR="$PWD/build" \
+            node utils/keyfile-lifecycle-browser-test.js
 
       - name: Validate and package production build
         id: package
@@ -166,11 +211,12 @@ jobs:
           skip-decompress: true
 
       - name: Recreate release checksum
+        working-directory: release-assets
         env:
           MANIFEST_VERSION: ${{ needs.build.outputs.manifest_version }}
         shell: bash
         run: |
-          archive="release-assets/syrius-extension-${MANIFEST_VERSION}-chrome-brave.zip"
+          archive="syrius-extension-${MANIFEST_VERSION}-chrome-brave.zip"
           test -f "$archive"
           sha256sum "$archive" > "${archive}.sha256"
 
@@ -189,12 +235,33 @@ jobs:
             exit 1
           fi
 
-          if [[ "$AUTO_RELEASE" == "true" ]]; then
-            if gh release view "$TAG_NAME" >/dev/null 2>&1; then
-              echo "::error::Release $TAG_NAME already exists. Increase the project version before publishing another release."
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            echo "::error::Release $TAG_NAME already exists. Increase the project version before publishing another release."
+            exit 1
+          fi
+
+          if [[ ! "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::The release candidate commit is invalid."
+            exit 1
+          fi
+
+          if ! tag_commit="$(gh api --paginate "repos/$GH_REPO/tags?per_page=100" \
+            --jq 'if type != "array" then error("Invalid tag response") else .[] end | if type != "object" or (.name | type) != "string" or (.name | length) == 0 or (.commit | type) != "object" then error("Invalid tag response") else . end | . as $tag | .commit.sha | if type == "string" and length == 40 and test("^[0-9a-f]+$") then select($tag.name == env.TAG_NAME) else error("Invalid tag commit") end')"; then
+            echo "::error::The remote release tag could not be checked safely."
+            exit 1
+          fi
+
+          if [[ -n "$tag_commit" ]]; then
+            if [[ ! "$tag_commit" =~ ^[0-9a-f]{40}$ || "$tag_commit" != "$TARGET_SHA" ]]; then
+              echo "::error::The remote release tag does not uniquely match the candidate commit."
               exit 1
             fi
+          elif [[ "$AUTO_RELEASE" != "true" ]]; then
+            echo "::error::The release tag is missing from the remote repository."
+            exit 1
+          fi
 
+          if [[ "$AUTO_RELEASE" == "true" ]]; then
             gh release create "$TAG_NAME" "${assets[@]}" \
               --target "$TARGET_SHA" \
               --title "Syrius Extension ${TAG_NAME#v}" \
@@ -202,11 +269,7 @@ jobs:
             exit 0
           fi
 
-          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
-            gh release upload "$TAG_NAME" "${assets[@]}" --clobber
-          else
-            gh release create "$TAG_NAME" "${assets[@]}" \
-              --title "Syrius Extension ${TAG_NAME#v}" \
-              --generate-notes \
-              --verify-tag
-          fi
+          gh release create "$TAG_NAME" "${assets[@]}" \
+            --title "Syrius Extension ${TAG_NAME#v}" \
+            --generate-notes \
+            --verify-tag

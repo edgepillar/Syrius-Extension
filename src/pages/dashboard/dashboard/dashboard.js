@@ -202,10 +202,8 @@ const Dashboard = () => {
     return () => observer.disconnect();
   }, [addressObject, loadMoreTransactions]);
 
-  // A settled block is one the node has accepted but the history has not been
-  // re-read for yet. Its placeholder row is cleared only after the refresh has
-  // landed, so the row is replaced by the real one rather than disappearing for
-  // a second first.
+  // Node acceptance does not establish that history has caught up. Retain each
+  // placeholder until its exact hash is observed in its account/network.
   const hasSettled = outgoing.some((entry) => entry.status === pendingStatus.settled);
 
   useEffect(() => {
@@ -213,18 +211,30 @@ const Dashboard = () => {
       return undefined;
     }
     let cancelled = false;
+    let refreshing = false;
 
-    (async () => {
-      await refreshNewestTransactions();
-      await refresh({ quiet: true });
-
-      if (!cancelled) {
-        dispatch(clearSettledTransactions());
+    const observe = async () => {
+      if (cancelled || refreshing) return;
+      refreshing = true;
+      try {
+        const observation = await refreshNewestTransactions();
+        await refresh({ quiet: true });
+        if (!cancelled && observation?.isCurrent()) {
+          const { owner, network, hashes } = observation;
+          dispatch(clearSettledTransactions({ owner, network, hashes }));
+        }
+      } catch (error) {
+        // A failed read is not evidence that any placeholder was observed.
+      } finally {
+        refreshing = false;
       }
-    })();
+    };
+    observe();
+    const timer = setInterval(observe, 8000);
 
     return () => {
       cancelled = true;
+      clearInterval(timer);
     };
   }, [hasSettled, refreshNewestTransactions, refresh, dispatch]);
 
@@ -232,7 +242,7 @@ const Dashboard = () => {
   // the node for the sake of it. The effect tears itself down when the last
   // pending row confirms.
   useEffect(() => {
-    if (!hasPending) {
+    if (!hasPending || hasSettled) {
       return undefined;
     }
     const timer = setInterval(() => {
@@ -241,7 +251,7 @@ const Dashboard = () => {
     }, 8000);
 
     return () => clearInterval(timer);
-  }, [hasPending, refreshNewestTransactions, refresh]);
+  }, [hasPending, hasSettled, refreshNewestTransactions, refresh]);
 
   const toggleHidden = async () => {
     try {

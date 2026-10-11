@@ -3,6 +3,7 @@ import { announceLock } from './announce';
 import { notify } from '../utils/notify';
 import session from './session';
 import vault from './vault';
+import { beginReadContextChange } from './readContext';
 
 // Locking, in one place.
 //
@@ -38,10 +39,13 @@ const lockWallet = async ({ afterRevoke } = {}) => {
   // the error instead, and MainLayout shows its retry screen for that lease.
   const announceLocked = vault.seal();
   notify.dismissAll();
+  const finishReadChange = beginReadContextChange();
   try {
     Zenon.getSingleton().clearSocketConnection();
   } catch (err) {
     // Already down.
+  } finally {
+    finishReadChange();
   }
   let generation;
   try {

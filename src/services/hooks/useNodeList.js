@@ -13,6 +13,7 @@ import {
 } from '../utils/storage';
 import { notify } from '../utils/notify';
 import { announceNode, captureLifetime } from '../wallet/announce';
+import { beginReadContextChange } from '../wallet/readContext';
 
 // The node list, shared by the two screens that show it.
 //
@@ -67,9 +68,9 @@ const useNodeList = () => {
       const activity = captureLifetime();
       const previous = currentNode;
       const zenon = Zenon.getSingleton();
-
       setIsConnecting(true);
       showSpinner(`Connecting to ${url}`);
+      const finishReadChange = beginReadContextChange();
 
       try {
         zenon.clearSocketConnection();
@@ -95,6 +96,7 @@ const useNodeList = () => {
         }
         return false;
       } finally {
+        finishReadChange();
         hideSpinner();
         setIsConnecting(false);
       }
