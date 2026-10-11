@@ -171,6 +171,9 @@ module.exports = {
     new CopyWebpackPlugin({
       patterns: [
         { from: './LICENSE', to: 'LICENSE', toType: 'file' },
+        { from: './src/assets/fonts/space-grotesk-LICENSE.txt', to: 'space-grotesk-LICENSE.txt', toType: 'file' },
+        { from: './src/assets/fonts/jetbrains-mono-LICENSE.txt', to: 'jetbrains-mono-LICENSE.txt', toType: 'file' },
+        { from: './src/components/icon/lucide-LICENSE.txt', to: 'lucide-LICENSE.txt', toType: 'file' },
         {
           from: path.join(path.dirname(require.resolve('znn-ts-sdk/package.json')), 'dist/index.js.LICENSE.txt'),
           to: 'index.js.LICENSE.txt',

@@ -12,6 +12,14 @@ node utils/third-party-readme-notices-test.js
 npm run build
 ```
 
+The build also copies the supplied notices for the vendored Space Grotesk and
+JetBrains Mono fonts and Lucide icons to `space-grotesk-LICENSE.txt`,
+`jetbrains-mono-LICENSE.txt` and `lucide-LICENSE.txt` at the package root. Compare
+each emitted file byte-for-byte with its tracked source under `src/assets/fonts/`
+or `src/components/icon/`, and verify that the final ZIP retains all three.
+Missing source notice files must fail the build. These copies preserve the
+existing supplied text; they do not establish complete legal coverage.
+
 The positive control reproduces the real generated asset from disposable local
 package directories. Five negative controls require failure for a missing
 README, changed package version, duplicate/missing license heading, and changed
