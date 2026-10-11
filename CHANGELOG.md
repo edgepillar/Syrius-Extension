@@ -215,7 +215,7 @@ into a Create-React-App-shaped extension boilerplate it had outgrown, and
 injected into exactly one website.
 
 The reasoning behind each change, and what was measured rather than assumed, is
-in [REFACTOR.md](REFACTOR.md).
+in [REFACTOR.md](docs/REFACTOR.md).
 
 ### Wallet correctness
 

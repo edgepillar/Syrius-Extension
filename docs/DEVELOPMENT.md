@@ -44,8 +44,8 @@ What each browser fixture establishes: [testing/](testing/).
 `utils/dev-harness.js` runs the extension in a Chrome of its own — separate
 profile, separate debugging port — with a wallet that unlocks itself, so a
 screen can be opened and worked on without clicking through the splash, the
-password and the menus every time. It defaults to the
-[go-zenon devnet](../../go-zenon/docker/devnet) (`ws://localhost:35998`, chain 69)
+password and the menus every time. It defaults to the sibling go-zenon
+checkout's devnet at `../go-zenon/docker/devnet` (`ws://localhost:35998`, chain 69)
 and that repo's committed dev mnemonic, at address index 1.
 
 ```bash
