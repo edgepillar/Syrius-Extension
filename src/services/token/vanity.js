@@ -76,15 +76,19 @@ const search = ({ head, prefix, suffix, onProgress, signal }) =>
 
     // A different high word per worker, so no two try the same nonce.
     const his = new Set();
-    while (his.size < count) his.add(crypto.getRandomValues(new Uint32Array(1))[0]);
 
     const start = (hi) => {
       const worker = new Worker(chrome.runtime.getURL('zts-search-worker.js'));
       workers.push(worker);
       worker.onerror = () => finish(fail(413));
       worker.onmessage = ({ data }) => {
+        if (settled) return;
         if (data?.ready) {
-          worker.postMessage({ head, prefix, suffix, hi, chunk: 20000 });
+          try {
+            worker.postMessage({ head, prefix, suffix, hi, chunk: 20000 });
+          } catch (error) {
+            finish(fail(413));
+          }
         } else if (data?.found && /^[0-9a-f]{16}$/.test(data.nonce) && typeof data.zts === 'string') {
           finish(null, { nonce: data.nonce, zts: data.zts, tried: tried + data.tried });
         } else if (Number.isInteger(data?.tried)) {
@@ -96,7 +100,12 @@ const search = ({ head, prefix, suffix, onProgress, signal }) =>
         }
       };
     };
-    his.forEach(start);
+    try {
+      while (his.size < count) his.add(crypto.getRandomValues(new Uint32Array(1))[0]);
+      his.forEach(start);
+    } catch (error) {
+      finish(fail(413));
+    }
   });
 
 // Signs the searched block with the found nonce and sends it. Used as the
