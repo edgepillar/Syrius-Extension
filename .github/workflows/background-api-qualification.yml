@@ -1,0 +1,76 @@
+name: Observe background API compatibility
+
+on:
+  push:
+    branches:
+      - codex/qualify-v036-background-api-2026-10-12
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compatibility:
+    if: >-
+      github.repository == 'edgepillar/Syrius-Extension' &&
+      github.ref == 'refs/heads/codex/qualify-v036-background-api-2026-10-12' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact qualification source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Observe the current browser's native API
+        shell: bash
+        env:
+          SYRIUS_EXPECT_WORKERS_SUPPORTED: 'true'
+          SYRIUS_BACKGROUND_API_REPORT: ${{ runner.temp }}/offscreen-modern.json
+        run: |
+          browser="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+          test -n "$browser"
+          "$browser" --version
+          CHROMIUM_PATH="$browser" node utils/fixtures/offscreen-api-probe.js
+
+      - name: Install owned headful runtime dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb xauth libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libdbus-1-3 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libgtk-3-0 libpango-1.0-0 libcairo2 libasound2 libatspi2.0-0
+
+      - name: Fetch pinned Chromium 112
+        shell: bash
+        run: |
+          archive="$RUNNER_TEMP/chromium-linux-1055.zip"
+          curl --fail --location --silent --show-error --output "$archive" \
+            https://playwright-akamai.azureedge.net/builds/chromium/1055/chromium-linux.zip
+          printf '%s  %s\n' '5dc43c51d3c226efeaf4f06c8aa9e993ac6e90cc36b9f5bb16b5a0deab13c268' "$archive" | sha256sum --check --status
+          unzip -tq "$archive"
+          unzip -q "$archive" -d "$RUNNER_TEMP/chromium-1055"
+          browser="$RUNNER_TEMP/chromium-1055/chrome-linux/chrome"
+          version="$("$browser" --version)"
+          printf '%s\n' "$version"
+          [[ "$version" =~ ^Chromium\ 112\.0\.5615\.29([[:space:]]|$) ]]
+          printf 'CHROMIUM_PATH=%s\n' "$browser" >> "$GITHUB_ENV"
+
+      - name: Observe the declared minimum's native API
+        env:
+          SYRIUS_LEGACY_BROWSER: '1'
+          SYRIUS_EXPECT_WORKERS_SUPPORTED: 'false'
+          SYRIUS_BACKGROUND_API_REPORT: ${{ runner.temp }}/offscreen-minimum.json
+        run: xvfb-run -a -s '-screen 0 1280x1024x24' node utils/fixtures/offscreen-api-probe.js
+
+      - name: Upload native API observations
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          path: ${{ runner.temp }}/offscreen-*.json
+          name: offscreen-api-observations
+          if-no-files-found: error
+          retention-days: 30
