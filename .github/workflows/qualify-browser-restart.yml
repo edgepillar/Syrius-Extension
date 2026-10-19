@@ -32,4 +32,4 @@ jobs:
         run: |
           browser_path="$(command -v google-chrome)"
           test -n "$browser_path"
-          CHROMIUM_PATH="$browser_path" node utils/browser-restart-probe.cjs
+          CHROMIUM_PATH="$browser_path" node utils/guard-phase-lifecycle-diagnostic.cjs
