@@ -520,7 +520,9 @@ const alice = 'z1qfixtureaccountalice', bob = 'z1qfixtureaccountbob';
   {
     const shared = profile(), a = windowOf(shared), { zenon, node } = nodeOf();
     node.delayMs = 900;
-    const key = { getAddress: async () => ({ toString: () => alice }) };
+    let releaseThird;
+    const thirdWait = new Promise((resolve) => { releaseThird = resolve; });
+    const labels = ['first', 'second', 'third', 'fourth'];
     const pow = [];
     Object.assign(a.sdk.utils.BlockUtils, {
       _checkAndSetFields: async (context, template) => {
@@ -536,8 +538,19 @@ const alice = 'z1qfixtureaccountalice', bob = 'z1qfixtureaccountbob';
       _setHashAndSignature: async (block) => block,
     });
     const send = a.publisher();
-    const signed = await Promise.all(['first', 'second', 'third', 'fourth'].map((label) => send(zenon, { label }, key)));
-    assert.deepEqual(signed.map((block) => block.height), [1, 2, 3, 4]);
+    // Address lookup precedes admission. Hold one caller until a later caller
+    // finishes so the fixture cannot accidentally rely on FIFO caller order.
+    const pendingSends = labels.map((label) => send(zenon, { label }, {
+      getAddress: async () => {
+        if (label === 'third') await thirdWait;
+        return { toString: () => alice };
+      },
+    }));
+    pendingSends[3].then(releaseThird, releaseThird);
+    const signed = await Promise.all(pendingSends);
+    assert.deepEqual(signed.map((block) => block.height).sort((a, b) => a - b), [1, 2, 3, 4]);
+    assert.deepEqual(signed.map((block) => block.hash.toString()), labels.map(hashOf), 'a caller received another block');
+    assert.deepEqual(node.published.map((block) => JSON.parse(block).height), [1, 2, 3, 4], 'blocks were published out of order');
     assert.deepEqual(pow, [1, 2, 3, 4], 'proof of work ran for a block that was not next');
     assert.equal(node.published.length, 4, 'a block was published twice or not at all');
     assert.deepEqual(await statesOf(a.journal, zenon, alice), ['accepted', 'accepted', 'accepted', 'accepted']);
