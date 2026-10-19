@@ -274,10 +274,13 @@ const unlock = async (value, success) => {
     stage = 'browser restart';
     console.log('CHECK: browser restart shutdown boundary');
     const firstId = browser.id;
-    report.first_browser_network = { ...browser.stats };
+    const firstStats = browser.stats;
     await browser.stop(); browser = null;
+    report.first_browser_network = { ...firstStats };
+    assert.equal(firstStats.shutdownClean, true, 'Browser restart follows a normal process exit');
     await launch();
     assert.equal(browser.id, firstId, 'Same install path retains extension identity');
+    assert.equal(browser.stats.persistentInstallReused, true, 'Browser restart reuses the retained enabled install');
     page = await browser.openPage();
     await locked();
     assert.equal((await snapshot(walletName)).encrypted, rotated.encrypted, 'Browser restart preserves only encrypted persistent wallet');
@@ -290,7 +293,7 @@ const unlock = async (value, success) => {
     await locked();
     assert.equal((await snapshot(walletName)).encrypted, rotated.encrypted, 'Extension reload preserves encrypted entry');
     await unlock(changedPassword, true);
-    casePassed('runtime reload and same-path re-registration clear unlock and preserve keyfile');
+    casePassed('native runtime reload clears unlock and preserves keyfile');
 
     stage = 'recovery import and removal';
     await lock();
