@@ -1,0 +1,35 @@
+name: Diagnose owned browser restart storage
+
+on:
+  push:
+    branches:
+      - codex/qualify-regression-fixtures-20261019
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    name: Diagnose Chrome restart storage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Check allocation floor
+        run: python3 -c 'import shutil; assert shutil.disk_usage(".").free >= 12 * 1024**3'
+      - name: Install locked dependencies
+        run: npm ci --legacy-peer-deps --cache "$RUNNER_TEMP/syrius-probe-npm-cache"
+      - name: Build production package
+        run: npm run build
+      - name: Observe native restart boundary
+        shell: bash
+        run: |
+          browser_path="$(command -v google-chrome)"
+          test -n "$browser_path"
+          CHROMIUM_PATH="$browser_path" node utils/browser-restart-probe.cjs
