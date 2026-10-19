@@ -23,13 +23,9 @@ jobs:
           package-manager-cache: false
       - name: Check allocation floor
         run: python3 -c 'import shutil; assert shutil.disk_usage(".").free >= 12 * 1024**3'
-      - name: Install locked dependencies
-        run: npm ci --legacy-peer-deps --cache "$RUNNER_TEMP/syrius-probe-npm-cache"
-      - name: Build production package
-        run: npm run build
       - name: Observe native restart boundary
         shell: bash
         run: |
           browser_path="$(command -v google-chrome)"
           test -n "$browser_path"
-          CHROMIUM_PATH="$browser_path" node utils/guard-phase-lifecycle-diagnostic.cjs
+          CHROMIUM_PATH="$browser_path" node utils/guard-worker-churn-control.cjs
