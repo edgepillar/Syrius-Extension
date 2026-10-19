@@ -1,0 +1,31 @@
+name: Diagnose owned guard termination
+
+on:
+  push:
+    branches:
+      - codex/guard-root-cause-20261019
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    name: Observe native worker guard termination
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Check allocation floor
+        run: python3 -c 'import shutil; assert shutil.disk_usage(".").free >= 12 * 1024**3'
+      - name: Observe bounded native termination controls
+        shell: bash
+        run: |
+          browser_path="$(command -v google-chrome)"
+          test -n "$browser_path"
+          CHROMIUM_PATH="$browser_path" node utils/guard-termination-control.cjs
