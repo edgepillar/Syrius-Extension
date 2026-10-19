@@ -34,6 +34,7 @@ const startBrowser = async ({ extensionDir, profileDir, setupScript = '' }) => {
   const executable = findBrowser();
   const stats = {
     guardedTargets: 0,
+    guardedWorkers: 0,
     deniedProxyConnections: 0,
     attemptedRequests: 0,
     blockedRequests: 0,
@@ -120,9 +121,14 @@ const startBrowser = async ({ extensionDir, profileDir, setupScript = '' }) => {
     const ready = (async () => {
       await guarded('Network.enable', {}, sessionId);
       await guarded('Network.setBlockedURLs', { urls: ['http://*', 'https://*', 'ws://*', 'wss://*'] }, sessionId);
-      await guarded('Network.emulateNetworkConditions', {
-        offline: true, latency: 0, downloadThroughput: -1, uploadThroughput: -1,
-      }, sessionId);
+      // Dedicated workers reject this page/network-state override. Their own
+      // URL block list and the browser-wide denying proxy remain mandatory;
+      // never resume them until the applicable guards have all succeeded.
+      if (target.type !== 'worker') {
+        await guarded('Network.emulateNetworkConditions', {
+          offline: true, latency: 0, downloadThroughput: -1, uploadThroughput: -1,
+        }, sessionId);
+      }
       await guarded('Runtime.enable', {}, sessionId);
       if (target.type === 'page') {
         await guarded('Page.enable', {}, sessionId);
@@ -132,6 +138,7 @@ const startBrowser = async ({ extensionDir, profileDir, setupScript = '' }) => {
       }
       await guarded('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: true, flatten: true }, sessionId);
       stats.guardedTargets++;
+      if (target.type === 'worker') stats.guardedWorkers++;
       await guarded('Runtime.runIfWaitingForDebugger', {}, sessionId);
       return target;
     })();
