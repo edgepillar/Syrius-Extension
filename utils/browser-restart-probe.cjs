@@ -24,26 +24,27 @@ const persistentInstall = `    const matching = async () => {
     stats.retainedInstallsBeforeLoad = installed.length;
     if (installed.length > 1) throw failure('BROWSER_EXTENSION_AMBIGUOUS');
     if (!installed.length) {
-      // Exercise Chrome's ordinary directory-drop installation in developer mode.
-      const data = { items: [], files: [extensionDir], dragOperationsMask: 1 };
-      for (const type of ['dragEnter', 'dragOver', 'drop']) {
-        await cdp('Input.dispatchDragEvent', { type, x: 100, y: 100, data }, settings.sessionId);
-      }
-      const installedBy = Date.now() + 15000;
-      while (!installed.length && Date.now() < installedBy) { await sleep(50); installed = await matching(); }
-      if (installed.length !== 1) throw failure('BROWSER_PERSISTENT_INSTALL_FAILED');
+      const loaded = await cdp('Extensions.loadUnpacked', { path: extensionDir });
+      // Reload through Chrome's ordinary developer UI before creating any data.
+      const reloaded = await evaluate(settings, 'new Promise(resolve => chrome.developerPrivate.reload(' + JSON.stringify(loaded.id) + ', {failQuietly:true,populateErrorForUnpacked:true}, result => resolve(!chrome.runtime.lastError && !result)))');
+      if (!reloaded) throw failure('BROWSER_PERSISTENT_INSTALL_FAILED');
+      installed = await matching();
+      if (installed.length !== 1 || installed[0].id !== loaded.id) throw failure('BROWSER_PERSISTENT_INSTALL_FAILED');
     }
     extensionId = installed[0].id;
     await closePage(settings);`;
 
 function helper(mode) {
-  let source = original.replace(anchor, mode === 'drag' ? persistentInstall :
+  let source = original.replace(anchor, mode === 'normalReload' ? persistentInstall :
     "    const installed = (await cdp('Extensions.getExtensions')).extensions || [];\n" +
     "    stats.retainedInstallsBeforeLoad = installed.filter(entry => entry.enabled === true && path.resolve(entry.path) === path.resolve(extensionDir)).length;\n" + anchor);
-  if (mode === 'drag') {
+  if (mode === 'normalReload') {
     const registration = "        const loaded = await cdp('Extensions.loadUnpacked', { path: extensionDir });\n        if (loaded.id !== extensionId) throw failure('BROWSER_EXTENSION_ID_CHANGED');\n";
     assert.equal(source.split(registration).length, 2);
     source = source.replace(registration, '');
+    const available = "        const listed = await cdp('Extensions.getExtensions');\n        if (!listed.extensions?.some(extension => extension.id === extensionId && extension.enabled === true)) {\n          throw failure('BROWSER_RELOAD_UNAVAILABLE');\n        }";
+    assert.equal(source.split(available).length, 2);
+    source = source.replace(available, "        const reloadBy = Date.now() + 15000;\n        let available = false;\n        while (!available && Date.now() < reloadBy) {\n          const listed = await cdp('Extensions.getExtensions');\n          available = listed.extensions?.some(extension => extension.id === extensionId && extension.enabled === true && path.resolve(extension.path) === path.resolve(extensionDir));\n          if (!available) await sleep(50);\n        }\n        if (!available) throw failure('BROWSER_RELOAD_UNAVAILABLE');");
   }
   source = source.replace('    socket?.close();', '    stats.shutdownExitCode = browser?.exitCode; stats.shutdownSignal = browser?.signalCode;\n    socket?.close();');
   const loaded = new Module(filename, module);
@@ -84,7 +85,7 @@ async function run(mode, extensionDir, fixture) {
     }
     value.passed = value.runtimeReloadPreserved && value.epochs.every((epoch, index) => epoch.web && epoch.local && epoch.cleanExit && epoch.sameIdentity &&
       epoch.externalResponses === 0 && epoch.externalWebSocketHandshakes === 0 &&
-      (index === 0 || mode !== 'drag' || epoch.retainedInstallsBeforeLoad === 1));
+      (index === 0 || mode !== 'normalReload' || epoch.retainedInstallsBeforeLoad === 1));
   } catch (error) {
     value.errorCode = error.code || 'UNCLASSIFIED_DIAGNOSTIC_ERROR';
     if (error.code === 'BROWSER_SHUTDOWN_TIMEOUT') allProcessesStopped = false;
@@ -101,8 +102,8 @@ async function run(mode, extensionDir, fixture) {
   fs.writeFileSync(path.join(minimal, 'manifest.json'), JSON.stringify({ manifest_version: 3, name: 'Owned restart diagnostic', version: '1.0', permissions: ['storage'] }));
   fs.writeFileSync(path.join(minimal, 'popup.html'), '<!doctype html><title>Owned storage diagnostic</title>');
   await run('original', minimal, 'minimal');
-  await run('drag', minimal, 'minimal');
-  await run('drag', path.join(root, 'build'), 'production');
+  await run('normalReload', minimal, 'minimal');
+  await run('normalReload', path.join(root, 'build'), 'production');
 })().catch(() => { process.exitCode = 1; }).finally(() => {
   if (allProcessesStopped) fs.rmSync(temporary, { recursive: true, force: true });
   console.log(JSON.stringify({ diagnostic_only: true, source_sha256: sourceDigest, results,
