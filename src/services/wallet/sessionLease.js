@@ -24,7 +24,13 @@ const lockName = 'znn.walletSession';
 // Records from before the policy and scope moved into the record are not live:
 // they require one password unlock after this update.
 const version = 2;
-const lockChoices = [0, 5, 15, 60];
+// Never is a timed session with no deadline: it still ends on a manual lock,
+// and when the browser closes, since session storage does not outlive it.
+const never = -1;
+const lockChoices = [0, 5, 15, 60, never];
+// Finite, because session storage keeps Infinity as null.
+const deadlineFrom = (now, minutes) => (minutes === never ? Number.MAX_SAFE_INTEGER : now + minutes * 60000);
+const longer = (minutes, than) => minutes !== than && (minutes === never || (than !== never && minutes > than));
 const ended = () => Object.assign(fail(201), { code: 'WALLET_LOCKED' });
 const unavailable = () => Object.assign(fail(202), {
   code: 'WALLET_SESSION_UNAVAILABLE',
@@ -85,13 +91,13 @@ const recordFrom = ({
   id, revision, walletName, entropy, selectedAddressIndex, ownerId, minutes, privateUntil, selectionId, scope, resumeFrom,
 }) => {
   if (!walletName || !entropy || !ownerId || !validMinutes(minutes) || !validScope(scope)) throw ended();
-  const timed = minutes > 0;
+  const timed = minutes !== 0;
   return {
     version, id, revision: revision || crypto.randomUUID(), walletName, selectedAddressIndex, ownerId, minutes,
     selectionId: selectionId || crypto.randomUUID(), scope, resumeFrom: resumeFrom ?? null,
     mode: timed ? 'timed' : 'local',
     lastActiveAt: Date.now(),
-    expiresAt: timed ? Date.now() + minutes * 60000 : 0,
+    expiresAt: timed ? deadlineFrom(Date.now(), minutes) : 0,
     ...(timed ? { entropy } : privateUntil ? { privateUntil } : {}),
   };
 };
@@ -167,14 +173,14 @@ const setPolicy = (id, ownerId, minutes, entropy, persist) => transaction(async 
   await assertLease(current, id, ownerId);
   const now = Date.now();
   const previousDeadline = current.mode === 'timed' ? current.expiresAt : current.privateUntil || 0;
-  const timed = minutes > 0;
-  const deadline = timed ? Math.min(previousDeadline || Infinity, now + minutes * 60000) : 0;
+  const timed = minutes !== 0;
+  const deadline = timed ? Math.min(previousDeadline || Infinity, deadlineFrom(now, minutes)) : 0;
   const { entropy: _entropy, privateUntil: _privateUntil, ...kept } = current;
   // Every policy write gets a new revision; see matchesExpected.
   const next = { ...kept, revision: crypto.randomUUID(), ownerId, minutes, mode: timed ? 'timed' : 'local',
     expiresAt: deadline, ...(timed ? { entropy } : {}) };
   const removesDeadline = !timed && Boolean(previousDeadline);
-  const relaxing = removesDeadline || (timed && (current.mode === 'local' || minutes > current.minutes));
+  const relaxing = removesDeadline || (timed && (current.mode === 'local' || longer(minutes, current.minutes)));
   const stage = removesDeadline ? { ...next, privateUntil: previousDeadline } :
     current.mode === 'local' && timed ? { ...kept, revision: crypto.randomUUID(), ownerId, privateUntil: deadline } :
       relaxing ? null : next;
@@ -244,7 +250,7 @@ const expire = () => transaction(async (stored) => {
 });
 
 const sessionLease = {
-  sessionKey, publicStateKey, lockChoices, validMinutes, ended, unavailable, changed, live, read, transaction,
+  sessionKey, publicStateKey, never, lockChoices, validMinutes, ended, unavailable, changed, live, read, transaction,
   begin, create, use, renew, select, setPolicy, load, clear, publish, publicValue, getPublicState,
   isLockedGeneration, expire,
 };

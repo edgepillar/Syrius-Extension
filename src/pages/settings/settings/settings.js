@@ -5,6 +5,7 @@ import Icon from '../../../components/icon/icon';
 import SettingsItem from '../../../components/settings-item/settings-item';
 import { getSettings } from '../../../services/utils/storage';
 import { updateSetting } from '../../../services/wallet/preferences';
+import lease from '../../../services/wallet/sessionLease';
 import { notify } from '../../../services/utils/notify';
 import { explorerChoices } from '../../../services/utils/explorer';
 import { applyTheme, themeChoices } from '../../../services/utils/theme';
@@ -27,6 +28,7 @@ const autoLockChoices = [
   { minutes: 5, label: '5 min' },
   { minutes: 15, label: '15 min' },
   { minutes: 60, label: '1 hour' },
+  { minutes: lease.never, label: 'Never' },
   { minutes: 0, label: 'On close' },
 ];
 

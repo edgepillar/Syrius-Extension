@@ -191,6 +191,16 @@ const watchdog = setTimeout(() => { console.error('Session policy checks timed o
     f.advance(1000); assert.equal(await f.api.touch(), true);
     assert.equal(f.record().expiresAt, f.now() + choice * 60000);
   }
+  // Never: a timed session no alarm ends; a later duration clamps it again.
+  {
+    const f = fixture(); f.disk.set('syrius.settings', JSON.stringify({ autoLockMinutes: -1 })); await f.unlock();
+    assert.equal(f.record().mode, 'timed'); assert.equal(f.record().expiresAt, Number.MAX_SAFE_INTEGER);
+    f.advance(30 * 24 * 3600000); await f.handlers.alarm({ name: 'znn.autoLock' });
+    assert.equal(await f.api.touch(), true); assert.deepEqual((await f.provider('znn_accounts')).result, ['A-address-0']);
+    await f.api.updateSetting('autoLockMinutes', 15); assert.equal(f.record().expiresAt, f.now() + 15 * 60000);
+    await f.api.updateSetting('autoLockMinutes', -1); assert.equal(f.record().minutes, -1);
+    f.advance(1000); assert.equal(await f.api.touch(), true); assert.equal(f.record().expiresAt, Number.MAX_SAFE_INTEGER);
+  }
   {
     const f = fixture(); await f.unlock(); f.advance(13 * 60000); const before = f.record();
     await f.api.updateSetting('autoLockMinutes', 5); assert.equal(f.record().expiresAt, before.expiresAt);
