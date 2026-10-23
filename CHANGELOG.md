@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.8
+
+New
+- Lock after: Never. The wallet stays unlocked until it is locked by hand
+  or the browser closes.
+
+Build
+- A release whose Firefox signing fails ships the unsigned add-on to
+  sideload, instead of no Firefox package (0.3.7 shipped none).
+
 ## 0.3.7
 
 New
