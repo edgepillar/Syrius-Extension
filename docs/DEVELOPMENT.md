@@ -132,7 +132,9 @@ creates the release with the Chrome/Brave ZIP. Each other platform builds and
 adds its own files in jobs of its own, so one that fails does not hold back the
 rest: the unsigned iOS IPA (macOS runner), the Android APK signed with the
 project's key, and the Firefox XPI, which addons.mozilla.org signs (unlisted),
-with `updates.json` for Firefox's own updater. Every file has a SHA-256
+with `updates.json` for Firefox's own updater. If signing fails, the release
+gets the unsigned XPI instead, without `updates.json`, and the run carries a
+warning; attach the signed one later by hand. Every file has a SHA-256
 checksum beside it. Android and Firefox need the repository's `ANDROID_*` and
 `WEB_EXT_*` secrets, and sign only on a release run: Mozilla signs a version
 once. To add a platform to a release published without it, run the workflow by
