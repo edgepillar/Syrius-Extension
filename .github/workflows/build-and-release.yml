@@ -112,6 +112,9 @@ jobs:
       - name: Lint source
         run: npm run lint
 
+      - name: Check lint plugin compatibility
+        run: node utils/eslint-compat-test.js
+
       - name: Check out pinned embedded ABI source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
