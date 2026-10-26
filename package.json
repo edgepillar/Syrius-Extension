@@ -83,7 +83,7 @@
     "html-loader": "^5.1.0",
     "html-webpack-plugin": "^5.5.0",
     "lru-cache": "^11.5.3",
-    "prettier": "^2.5.1",
+    "prettier": "^3.9.10",
     "sass-loader": "^17.0.1",
     "source-map-loader": "^3.0.1",
     "style-loader": "^3.3.1",
