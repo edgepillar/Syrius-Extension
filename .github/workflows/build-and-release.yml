@@ -112,6 +112,9 @@ jobs:
       - name: Lint source
         run: npm run lint
 
+      - name: Check lint plugin compatibility
+        run: node utils/eslint-compat-test.js
+
       - name: Check out pinned embedded ABI source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -256,7 +259,9 @@ jobs:
   # sign it on install and renew it there (README, iOS).
   ios:
     name: Build iOS app (unsigned IPA)
-    runs-on: macos-15
+    # The macos-15 ARM64 pool can exhaust capacity before a job starts.
+    # Build the same generic iOS device target on the standard Intel pool.
+    runs-on: macos-15-intel
     timeout-minutes: 45
     permissions:
       contents: read
