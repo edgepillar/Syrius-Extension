@@ -27,8 +27,10 @@
  */
 
 const globals = require("globals");
+const { fixupConfigRules } = require("@eslint/compat");
 
-module.exports = [{
+// Preserve the existing plugin rules across ESLint 9 and 10's context APIs.
+module.exports = fixupConfigRules([{
   "files": ["**/*.{js,jsx}"],
   "languageOptions": {
     "parser": require("@babel/eslint-parser"),
@@ -560,4 +562,4 @@ module.exports = [{
       "version": "detect"
     }
   }
-}];
+}]);
