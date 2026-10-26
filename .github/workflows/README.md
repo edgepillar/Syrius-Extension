@@ -16,6 +16,12 @@ alternate release path. The workflow verifies that the tag matches the manifest
 version before building. A successful master run alone does not publish an
 update.
 
+The unsigned iOS job uses the standard `macos-15-intel` runner. The `macos-15`
+label selects the ARM64 pool, where validation jobs have failed to acquire a
+runner before any build step ran. The Intel host still builds the generic iOS
+device target; its host architecture does not turn the IPA into a simulator
+build. Runner availability remains a GitHub service dependency.
+
 Both release paths refuse an existing release for the version tag. Rerunning a
 tag workflow cannot replace an already published ZIP or checksum; publish a
 new version for different bytes. Before publication, any existing remote version
