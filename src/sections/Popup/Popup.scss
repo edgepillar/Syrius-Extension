@@ -4173,6 +4173,45 @@ $spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   background: color-mix(in srgb, var(--highlight) 14%, transparent);
 }
 
+.dashboard-page {
+  position: relative;
+  transition: transform 180ms $ease-out;
+}
+
+.dashboard-page.is-pulling {
+  transition: none;
+}
+
+.pull-refresh {
+  position: absolute;
+  top: -42px;
+  left: 50%;
+  width: 32px;
+  height: 32px;
+  margin-left: -16px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-full);
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--muted-foreground);
+  pointer-events: none;
+  transition: color var(--motion), border-color var(--motion);
+
+  .icon {
+    transform: rotate(var(--pull-turn, 0deg));
+  }
+
+  &.is-armed {
+    color: var(--primary);
+    border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+  }
+
+  &.is-refreshing .icon {
+    animation: spin 900ms linear infinite;
+  }
+}
+
 // A zap landing: twelve sparks thrown out from the top of the activity
 // list, once. It is over in under a second and takes no clicks. The ledger
 // figures above it do not move.
