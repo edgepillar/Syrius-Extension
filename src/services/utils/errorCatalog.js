@@ -32,6 +32,7 @@ const catalog = {
   105: 'The requesting document has left',
   106: 'CoinGecko responded {status}',
   107: 'no momentum',
+  108: 'The node connection was lost.',
   // What a form refused, in the form's own words.
   110: '{text}',
   // Updating an unpacked install (services/update)

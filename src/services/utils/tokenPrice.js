@@ -35,7 +35,8 @@ const fetchTokenPrices = async () => {
   ]);
 
   if (znn.status === 'rejected' && qsr.status === 'rejected') {
-    throw znn.reason;
+    const error = znn.reason;
+    throw error;
   }
   return {
     znn: znn.status === 'fulfilled' ? znn.value : null,

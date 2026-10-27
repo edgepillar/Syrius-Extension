@@ -16,6 +16,7 @@ import { announceUnlock } from './announce';
 import vault from './vault';
 import { beginReadContextChange, readContextChanging } from './readContext';
 import { load as loadPopupState } from '../utils/popupState';
+import { fail } from '../utils/errors';
 
 // Everything that has to happen between "this is the right password" and "the
 // wallet is on screen", in the one order that works.
@@ -125,16 +126,16 @@ const dropSocket = () => {
     const entry = queue[id];
     delete queue[id];
     clearTimeout(entry?.timeout);
-    try { entry?.promise?.[1]?.(new Error('connection lost')); } catch (error) { return; }
+    try { entry?.promise?.[1]?.(fail(108)); } catch (error) { return; }
   });
 };
 
 let checking = null;
 
-const busy = () => (pending && !pending.done) || readContextChanging();
+const connecting = () => (pending && !pending.done) || readContextChanging();
 
 const checkNode = (dispatch, isCurrent = () => true, { probe = true } = {}) => {
-  if (busy()) return Promise.resolve(null);
+  if (connecting()) return Promise.resolve(null);
   if (checking) return checking;
   checking = (async () => {
     const rpc = Zenon.getSingleton().wsClient?._wsRpc2Client;
@@ -142,7 +143,7 @@ const checkNode = (dispatch, isCurrent = () => true, { probe = true } = {}) => {
       if (isCurrent()) dispatch(storeIsConnected(true));
       return true;
     }
-    if (busy() || !isCurrent() || Zenon.getSingleton().wsClient?._wsRpc2Client !== rpc) return null;
+    if (connecting() || !isCurrent() || Zenon.getSingleton().wsClient?._wsRpc2Client !== rpc) return null;
     dispatch(storeIsConnected(false));
     const nodeUrl = getCurrentNodeUrl() || defaultNodeUrl;
     dropSocket();

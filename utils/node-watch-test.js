@@ -42,6 +42,7 @@ const fixture = ({ ready = true, answers = true, connects = true, changing = fal
     './vault': { __esModule: true, default: {} },
     './readContext': { beginReadContextChange: () => () => {}, readContextChanging: () => changing },
     '../utils/popupState': { load: async () => {} },
+    '../utils/errors': { fail: id => Object.assign(new Error(id === 108 ? 'The node connection was lost.' : `fail ${id}`), { errorId: id }) },
   };
   const mod = { exports: {} };
   new Function('module', 'exports', 'require', source)(mod, mod.exports, name => {
@@ -67,7 +68,7 @@ const fixture = ({ ready = true, answers = true, connects = true, changing = fal
     const hung = f.zenon.ledger.getFrontierMomentum();
     f.calls.length = 0;
     const result = f.checkNode(f.dispatch);
-    await assert.rejects(hung, /connection lost/);
+    await assert.rejects(hung, error => error.errorId === 108 && error.code === undefined);
     assert.equal(await result, true);
     assert(Date.now() - started < 4000, 'a half-open socket is replaced within the probe window');
     assert.equal(old.closed, true); assert.equal(old.autoReconnect, false); assert.deepEqual(old.queue, {});
