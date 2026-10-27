@@ -8,7 +8,7 @@ import { fail } from './errors';
 // `globalAttention` by taking the next origin each time.
 const limits = Object.freeze({ bytes: 128 * 1024, depth: 32, nodes: 20000,
   pending: 16, perOrigin: 2, perTab: 4, activeHandlers: 32, ttl: 30 * 60 * 1000,
-  globalAttention: 5000, originAttention: 30000, tabAttention: 30000, history: 64 });
+  globalAttention: 5000, originAttention: 10000, tabAttention: 10000, history: 64 });
 const invalid = () => Object.assign(fail(810), { code: -32602 });
 const busy = () => Object.assign(fail(811), { code: -32005 });
 const validResponseId = id => (typeof id === 'string' && id.length > 0 && id.length <= 128) ||

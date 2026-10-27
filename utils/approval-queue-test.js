@@ -211,6 +211,7 @@ const watchdog = setTimeout(() => { console.error('Approval queue checks timed o
   for (const value of [null, true, false, 0, -1e20, '', '界 🌍\n\t"\\', '\ud800', { title: 'hello', data: [1, 2, 3] }]) {
     assert.equal(policy.boundedJson(value), Buffer.byteLength(JSON.stringify(value)));
   }
+  assert.equal(limits.originAttention, 10000); assert.equal(limits.tabAttention, 10000);
   assert.equal(policy.boundedJson('a'.repeat(limits.bytes - 2)), limits.bytes);
   assert.throws(() => policy.boundedJson('a'.repeat(limits.bytes - 1)), error => error.code === -32602);
   assert.throws(() => policy.boundedJson('界'.repeat(limits.bytes / 2)), /limits/);
