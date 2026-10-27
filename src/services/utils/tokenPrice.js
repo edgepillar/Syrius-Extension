@@ -1,39 +1,46 @@
 import { fail } from './errors';
 
-// Live USD prices for ZNN and QSR, from CoinGecko's public price endpoint.
-//
-// Neither token's CoinGecko id is its ticker. ZNN is listed as `zenon-2` —
-// plain `zenon` belongs to an unrelated project — and QSR as `quasar`. This is
-// the same mapping zenonhub's own price service uses (`TokenPrice.php` in
-// `zenonhub-io/zenonhub`), cross-checked against the coin's own CoinGecko page.
+// Live USD prices for ZNN and QSR.
 
 const coingeckoIds = {
   znn: 'zenon-2',
-  qsr: 'quasar',
 };
 
-const priceUrl = `https://api.coingecko.com/api/v3/simple/price?ids=${coingeckoIds.znn},${coingeckoIds.qsr}&vs_currencies=usd`;
+const wqsrEthereum = '0x96546afe4a21515a3a30cd3fd64a70eb478dc174';
+
+const priceUrl = `https://api.coingecko.com/api/v3/simple/price?ids=${coingeckoIds.znn}&vs_currencies=usd`;
+const qsrPriceUrl = `https://api.geckoterminal.com/api/v2/simple/networks/eth/token_price/${wqsrEthereum}`;
+
+const finite = (value) => {
+  const number = typeof value === 'string' ? Number(value) : value;
+  return typeof number === 'number' && Number.isFinite(number) && number > 0 ? number : null;
+};
+
+const getJson = async (url) => {
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw fail(106, { status: response.status });
+  }
+  return response.json();
+};
 
 // `null` for either token the response did not carry a price for, rather than
 // throwing — a price feed having nothing to say about one token is not reason
 // enough to take the whole dashboard down.
 const fetchTokenPrices = async () => {
-  const response = await fetch(priceUrl);
+  const [znn, qsr] = await Promise.allSettled([
+    getJson(priceUrl).then((json) => finite(json?.[coingeckoIds.znn]?.usd)),
+    getJson(qsrPriceUrl).then((json) => finite(json?.data?.attributes?.token_prices?.[wqsrEthereum])),
+  ]);
 
-  if (!response.ok) {
-    throw fail(106, { status: response.status });
+  if (znn.status === 'rejected' && qsr.status === 'rejected') {
+    throw znn.reason;
   }
-  const json = await response.json();
-
-  const priceOf = (id) => {
-    const value = json?.[id]?.usd;
-    return typeof value === 'number' && Number.isFinite(value) ? value : null;
-  };
-
   return {
-    znn: priceOf(coingeckoIds.znn),
-    qsr: priceOf(coingeckoIds.qsr),
+    znn: znn.status === 'fulfilled' ? znn.value : null,
+    qsr: qsr.status === 'fulfilled' ? qsr.value : null,
   };
 };
 
-export { coingeckoIds, fetchTokenPrices };
+export { coingeckoIds, wqsrEthereum, priceUrl, qsrPriceUrl, fetchTokenPrices };
