@@ -1,6 +1,15 @@
 # GitHub Actions workflow notes
 
-The executable workflow is `build-and-release.yml` in this directory.
+The executable workflows are `build-and-release.yml` and `codeql.yml` in this
+directory.
+
+`codeql.yml` is code scanning's advanced setup: Actions and JavaScript without a
+build, and Java from a real Gradle compile. Java runs `npx cap sync android`
+first, because `android/app/capacitor.build.gradle` imports the generated
+`capacitor-cordova-android-plugins/cordova.variables.gradle`, which is not in
+the tree. Without it the scan fell back to guessed dependencies and resolved
+20% of call targets (#71). Code scanning's default setup must stay off: GitHub
+refuses advanced uploads while it is on.
 
 It builds the Manifest V3 extension with Node.js 24, runs the dependency audit,
 lint checks, pinned Go-source ABI comparison, validation failure-path checks,

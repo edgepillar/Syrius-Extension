@@ -34,6 +34,9 @@ Build
   `fast-uri` and `serialize-javascript` patched so the audit passes (#80).
 - The unsigned iOS IPA builds on `macos-15-intel`, where a runner is found
   (#80).
+- Code scanning runs from `codeql.yml`. Java is scanned from a real Gradle
+  build after `cap sync`, instead of guessing at dependencies with a
+  generated Capacitor file missing (#71).
 
 ## 0.3.7
 
