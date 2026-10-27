@@ -112,6 +112,9 @@ jobs:
       - name: Lint source
         run: npm run lint
 
+      - name: Check lint plugin compatibility
+        run: node utils/eslint-compat-test.js
+
       - name: Check out pinned embedded ABI source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -256,7 +259,9 @@ jobs:
   # sign it on install and renew it there (README, iOS).
   ios:
     name: Build iOS app (unsigned IPA)
-    runs-on: macos-15
+    # The macos-15 ARM64 pool can exhaust capacity before a job starts.
+    # Build the same generic iOS device target on the standard Intel pool.
+    runs-on: macos-15-intel
     timeout-minutes: 45
     permissions:
       contents: read
@@ -339,9 +344,10 @@ jobs:
           archive: false
 
   # The Android app. A release is signed with the project's key, which only a
-  # tag or an attach run is given; every other run builds and keeps the debug
-  # APK. It is its own app (network.zenon.syrius.debug), so it installs beside
-  # a release instead of over it.
+  # tag or an attach run is given. Pull requests and branches other than
+  # master build and keep the debug APK instead; master does not build it.
+  # The debug APK is its own app (network.zenon.syrius.debug), so it installs
+  # beside a release instead of over it.
   android:
     name: Build Android app
     runs-on: ubuntu-latest
@@ -378,7 +384,7 @@ jobs:
 
       - name: Build the debug APK
         id: debug
-        if: env.RELEASING != 'true'
+        if: env.RELEASING != 'true' && github.ref != 'refs/heads/master' && github.ref != 'refs/heads/main'
         shell: bash
         run: |
           export JAVA_HOME="$JAVA_HOME_21_X64"
@@ -389,7 +395,7 @@ jobs:
           printf 'apk=%s\n' "$apk" >> "$GITHUB_OUTPUT"
 
       - name: Upload debug APK artifact
-        if: env.RELEASING != 'true'
+        if: env.RELEASING != 'true' && github.ref != 'refs/heads/master' && github.ref != 'refs/heads/main'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           path: ${{ steps.debug.outputs.apk }}

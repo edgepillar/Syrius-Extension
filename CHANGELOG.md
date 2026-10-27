@@ -36,9 +36,10 @@ Build
 - Release packages carry GitHub build provenance attestations (#59).
 - CI checks site connections on the built Firefox add-on when the runner
   has Firefox.
-- Every CI run keeps all four packages: a run that is not a release now
-  keeps the debug APK and the unsigned Firefox add-on too, beside the
-  Chrome/Brave ZIP and the iOS IPA.
+- A CI run that is not a release keeps the unsigned Firefox add-on too,
+  beside the Chrome/Brave ZIP and the iOS IPA. Pull requests and branches
+  other than master also keep the debug APK; master and releases never
+  build it.
 - The ten open code scanning alerts are fixed, all in test fixtures and one
   dev tool; none was in the shipped wallet. The name tests no longer copy
   go-zenon's backtracking pattern and instead check every short name
