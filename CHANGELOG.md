@@ -13,7 +13,9 @@ Fixed
   connection could be gone for good or take seconds to return. The wallet
   now checks the node on return, when the page is shown again and when the
   network comes back, and reconnects at once if it does not answer. Calls
-  left waiting on the dead connection end instead of hanging.
+  left waiting on the dead connection end instead of hanging. A check that
+  finishes after the node has changed no longer overwrites the new node's
+  status (#82).
 - A sent block's row on Home cleared only on a separate 8 s poll, which a
   confirmation could race, so it could keep pulsing until Home was opened
   again. Every history read now clears what it saw, and Home reads every
