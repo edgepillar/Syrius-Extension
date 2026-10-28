@@ -137,18 +137,25 @@ const connecting = () => (pending && !pending.done) || readContextChanging();
 const checkNode = (dispatch, isCurrent = () => true, { probe = true } = {}) => {
   if (connecting()) return Promise.resolve(null);
   if (checking) return checking;
+  // A node change may finish while a probe or reconnection is awaited.
+  const isCurrentRpc = (rpc) => !connecting() && isCurrent() &&
+    Zenon.getSingleton().wsClient?._wsRpc2Client === rpc;
   checking = (async () => {
     const rpc = Zenon.getSingleton().wsClient?._wsRpc2Client;
-    if (rpc?.ready && (!probe || await answers(probeMs))) {
-      if (isCurrent()) dispatch(storeIsConnected(true));
+    const healthy = rpc?.ready && (!probe || await answers(probeMs));
+    if (!isCurrentRpc(rpc)) return null;
+    if (healthy) {
+      dispatch(storeIsConnected(true));
       return true;
     }
-    if (connecting() || !isCurrent() || Zenon.getSingleton().wsClient?._wsRpc2Client !== rpc) return null;
     dispatch(storeIsConnected(false));
     const nodeUrl = getCurrentNodeUrl() || defaultNodeUrl;
     dropSocket();
-    const ok = await attemptNode(nodeUrl);
-    if (isCurrent()) dispatch(storeIsConnected(ok));
+    const attempt = attemptNode(nodeUrl);
+    const replacementRpc = Zenon.getSingleton().wsClient?._wsRpc2Client;
+    const ok = await attempt;
+    if (!isCurrentRpc(replacementRpc)) return null;
+    dispatch(storeIsConnected(ok));
     return ok;
   })().finally(() => { checking = null; });
   return checking;

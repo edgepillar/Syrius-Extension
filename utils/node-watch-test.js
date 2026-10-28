@@ -51,7 +51,15 @@ const fixture = ({ ready = true, answers = true, connects = true, changing = fal
   });
   const dispatch = action => dispatched.push(action);
   return { zenon, calls, dispatched, dispatch, checkNode: mod.exports.checkNode,
+    setChanging(value) { changing = value; },
     connected: () => dispatched.filter(a => a.type === 'connected').map(a => a.v) };
+};
+
+const deferred = () => {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
 };
 
 (async () => {
@@ -107,5 +115,59 @@ const fixture = ({ ready = true, answers = true, connects = true, changing = fal
     await a;
     assert.equal(f.calls.filter(c => c.startsWith('initialize')).length, 1);
   }
-  console.log(JSON.stringify({ node_watch: true, cases: 8, passed: true }));
+  {
+    const f = fixture();
+    const started = deferred();
+    const reply = deferred();
+    f.zenon.ledger.getFrontierMomentum = () => {
+      started.resolve();
+      return reply.promise;
+    };
+    const checking = f.checkNode(f.dispatch);
+    await started.promise;
+    const replacement = { ready: false, queue: {} };
+    f.zenon.wsClient = { _wsRpc2Client: replacement };
+    reply.resolve({});
+    assert.equal(await checking, null);
+    assert.deepEqual(f.connected(), [], 'a superseded probe cannot mark the replacement connected');
+    assert.equal(f.zenon.wsClient._wsRpc2Client, replacement);
+  }
+  {
+    const f = fixture();
+    const started = deferred();
+    const reply = deferred();
+    f.zenon.ledger.getFrontierMomentum = () => {
+      started.resolve();
+      return reply.promise;
+    };
+    const checking = f.checkNode(f.dispatch);
+    await started.promise;
+    f.setChanging(true);
+    reply.resolve({});
+    assert.equal(await checking, null);
+    assert.deepEqual(f.connected(), [], 'a probe cannot publish while another node change is open');
+  }
+  for (const succeeds of [true, false]) {
+    const f = fixture({ ready: false });
+    const started = deferred();
+    const completed = deferred();
+    f.zenon.initialize = () => {
+      const reconnecting = { ready: false, queue: {} };
+      f.zenon.wsClient = { _wsRpc2Client: reconnecting };
+      started.resolve();
+      return completed.promise.then(() => { reconnecting.ready = true; });
+    };
+    const checking = f.checkNode(f.dispatch);
+    await started.promise;
+    const replacement = { ready: !succeeds, queue: {} };
+    f.zenon.wsClient = { _wsRpc2Client: replacement };
+    if (!succeeds) f.dispatch({ type: 'connected', v: true });
+    if (succeeds) completed.resolve();
+    else completed.reject(new Error('superseded connection failed'));
+    assert.equal(await checking, null);
+    assert.deepEqual(f.connected(), succeeds ? [false] : [false, true],
+      'a superseded reconnection cannot overwrite the replacement connection state');
+    assert.equal(f.zenon.wsClient._wsRpc2Client, replacement);
+  }
+  console.log(JSON.stringify({ node_watch: true, cases: 12, passed: true }));
 })().catch(error => { console.error(error); process.exitCode = 1; });
