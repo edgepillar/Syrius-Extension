@@ -17,6 +17,7 @@ import JournalNotice from '../../components/journal-notice/journal-notice';
 import AppWatch from '../../components/app-watch/app-watch';
 import BackgroundReceive from '../../components/background-receive/background-receive';
 import BlockSync from '../../components/block-sync/block-sync';
+import NodeWatch from '../../components/node-watch/node-watch';
 import { saveRoute } from '../../services/utils/popupState';
 
 import Settings from '../../pages/settings/settings/settings';
@@ -150,6 +151,7 @@ const TabsLayout = () => {
       <AppWatch />
       <BackgroundReceive />
       <BlockSync />
+      <NodeWatch />
       {!subScreenTitle && <MenuTabs />}
     </div>
   );

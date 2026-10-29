@@ -94,6 +94,7 @@ const appLockModule = (f) => load('src/services/hooks/useAppLock.js', (name) => 
   if (name === 'react-redux') return { useDispatch: () => () => {} };
   if (name.endsWith('/utils/app')) return appModule(f);
   if (name.endsWith('/wallet/lock')) return { __esModule: true, default: async () => { f.state.locks++; } };
+  if (name.endsWith('/wallet/sessionLease')) return { __esModule: true, default: { never: -1 } };
   if (name.endsWith('/utils/storage')) return { getSettings: () => ({ autoLockMinutes: f.state.autoLockMinutes }) };
   if (name.endsWith('/utils/notify')) return notifyModule(f);
   if (name.endsWith('/redux/walletSlice')) return { resetWalletState: () => ({}) };
@@ -295,6 +296,19 @@ const page = (kind, f) => {
     assert.equal(f.state.lifecycle.size, 0);
     await emit({ state: 'foreground', own: false, away: 3600000 });
     assert.equal(f.state.locks, 1, 'unmounted offer must not keep a listener');
+  }
+  // Never: no time away locks the app.
+  {
+    const f = fixture(); f.state.phone = { available: true, enabled: false };
+    f.state.autoLockMinutes = -1;
+    const view = page('create', f);
+    await finite(view.submit());
+    const offer = elements(view.render()).find((element) => element.props?.walletName);
+    offer.type(offer.props);
+    const cleanup = f.state.lockEffects[0]();
+    for (const listener of f.state.lifecycle) await listener({ state: 'foreground', own: false, away: 30 * 24 * 3600000 });
+    assert.equal(f.state.locks, 0);
+    cleanup();
   }
   // The tab screens still use the same hook; their unrelated incoming polling
   // effect is not launched by this control.

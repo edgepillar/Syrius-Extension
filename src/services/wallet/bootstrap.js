@@ -14,8 +14,9 @@ import {
 } from '../utils/storage';
 import { announceUnlock } from './announce';
 import vault from './vault';
-import { beginReadContextChange } from './readContext';
+import { beginReadContextChange, readContextChanging } from './readContext';
 import { load as loadPopupState } from '../utils/popupState';
+import { fail } from '../utils/errors';
 
 // Everything that has to happen between "this is the right password" and "the
 // wallet is on screen", in the one order that works.
@@ -104,6 +105,62 @@ const replaceWaitingNode = async (dispatch, nodeUrl) => {
 // then a tap away.
 const stopWaitingForNode = () => pending?.finish(false);
 
+const probeMs = 2500;
+
+const answers = (ms) => new Promise((resolve) => {
+  const timer = setTimeout(() => resolve(false), ms);
+  Promise.resolve()
+    .then(() => Zenon.getSingleton().ledger.getFrontierMomentum())
+    .then(() => resolve(true), () => resolve(false))
+    .finally(() => clearTimeout(timer));
+});
+
+const dropSocket = () => {
+  const zenon = Zenon.getSingleton();
+  const rpc = zenon.wsClient?._wsRpc2Client;
+  [() => rpc?.setAutoReconnect?.(false), () => rpc?.close?.(), () => zenon.clearSocketConnection()]
+    .forEach((step) => { try { step(); } catch (error) { return; } });
+  const queue = rpc?.queue;
+  if (!queue || typeof queue !== 'object') return;
+  Object.keys(queue).forEach((id) => {
+    const entry = queue[id];
+    delete queue[id];
+    clearTimeout(entry?.timeout);
+    try { entry?.promise?.[1]?.(fail(108)); } catch (error) { return; }
+  });
+};
+
+let checking = null;
+
+const connecting = () => (pending && !pending.done) || readContextChanging();
+
+const checkNode = (dispatch, isCurrent = () => true, { probe = true } = {}) => {
+  if (connecting()) return Promise.resolve(null);
+  if (checking) return checking;
+  // A node change may finish while a probe or reconnection is awaited.
+  const isCurrentRpc = (rpc) => !connecting() && isCurrent() &&
+    Zenon.getSingleton().wsClient?._wsRpc2Client === rpc;
+  checking = (async () => {
+    const rpc = Zenon.getSingleton().wsClient?._wsRpc2Client;
+    const healthy = rpc?.ready && (!probe || await answers(probeMs));
+    if (!isCurrentRpc(rpc)) return null;
+    if (healthy) {
+      dispatch(storeIsConnected(true));
+      return true;
+    }
+    dispatch(storeIsConnected(false));
+    const nodeUrl = getCurrentNodeUrl() || defaultNodeUrl;
+    dropSocket();
+    const attempt = attemptNode(nodeUrl);
+    const replacementRpc = Zenon.getSingleton().wsClient?._wsRpc2Client;
+    const ok = await attempt;
+    if (!isCurrentRpc(replacementRpc)) return null;
+    dispatch(storeIsConnected(ok));
+    return ok;
+  })().finally(() => { checking = null; });
+  return checking;
+};
+
 // Restore carries the original lease identity; only a password creates a new
 // one. Slow address/node work cannot re-publish a revoked unlock.
 const completeUnlock = async ({ walletName, password, sessionRecord, dispatch }) => {
@@ -136,4 +193,4 @@ const completeUnlock = async ({ walletName, password, sessionRecord, dispatch })
   return { address, isConnected };
 };
 
-export { completeUnlock, connectToNode, waitingForNode, replaceWaitingNode, stopWaitingForNode };
+export { completeUnlock, connectToNode, checkNode, waitingForNode, replaceWaitingNode, stopWaitingForNode };

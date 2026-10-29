@@ -98,4 +98,6 @@ if (typeof window !== 'undefined' && typeof window.addEventListener === 'functio
   });
 }
 
-export { captureReadContext, subscribeReadContext, retireReadContext, beginReadContextChange };
+const readContextChanging = () => transitions.size > 0;
+
+export { captureReadContext, subscribeReadContext, retireReadContext, beginReadContextChange, readContextChanging };

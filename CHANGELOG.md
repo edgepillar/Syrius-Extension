@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.3.8
+
+New
+- Lock after: Never. The wallet stays unlocked until it is locked by hand
+  or the browser closes. Choosing it removes the running session's old
+  deadline at once (#74).
+- Pull down on Home to read the balance and history again.
+
+Fixed
+- Coming back to the app after it was in the background, the node
+  connection could be gone for good or take seconds to return. The wallet
+  now checks the node on return, when the page is shown again and when the
+  network comes back, and reconnects at once if it does not answer. Calls
+  left waiting on the dead connection end instead of hanging. A check that
+  finishes after the node has changed no longer overwrites the new node's
+  status (#82).
+- A sent block's row on Home cleared only on a separate 8 s poll, which a
+  confirmation could race, so it could keep pulsing until Home was opened
+  again. Every history read now clears what it saw, and Home reads every
+  3 s while a block is in flight.
+- The QSR price was CoinGecko's `quasar`, another project's token. QSR is
+  now priced from wrapped QSR's Uniswap pool on Ethereum, through
+  GeckoTerminal.
+
+Changed
+- After an approval window is declined or closed, a site can ask again
+  after 10 seconds instead of 30.
+
+Build
+- A release whose Firefox signing fails ships the unsigned add-on to
+  sideload, instead of no Firefox package (0.3.7 shipped none).
+- Dependencies: ESLint 10 (#78) through `@eslint/compat` (#80), Prettier 3
+  (#77), css-loader 7 (#79), fs-extra 11 (#76) and minor updates (#75).
+  `fast-uri` and `serialize-javascript` patched so the audit passes (#80).
+- The unsigned iOS IPA builds on `macos-15-intel`, where a runner is found
+  (#80).
+- Code scanning runs from `codeql.yml`. Java is scanned from a real Gradle
+  build after `cap sync`, instead of guessing at dependencies with a
+  generated Capacitor file missing (#71).
+
 ## 0.3.7
 
 New

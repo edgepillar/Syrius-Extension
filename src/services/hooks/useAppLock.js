@@ -4,6 +4,7 @@ import { useDispatch } from 'react-redux';
 
 import app from '../utils/app';
 import lockWallet from '../wallet/lock';
+import lease from '../wallet/sessionLease';
 import { getSettings } from '../utils/storage';
 import { notify } from '../utils/notify';
 import { resetWalletState } from '../redux/walletSlice';
@@ -23,7 +24,7 @@ const useAppLock = () => {
     return native.onLifecycle(async ({ state, own, away }) => {
       if (state !== 'foreground' || own) return;
       const minutes = getSettings().autoLockMinutes;
-      if (away < minutes * 60000) return;
+      if (minutes === lease.never || away < minutes * 60000) return;
       try {
         await lockWallet();
         invalidateAccountCache();

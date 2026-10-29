@@ -112,6 +112,9 @@ jobs:
       - name: Lint source
         run: npm run lint
 
+      - name: Check lint plugin compatibility
+        run: node utils/eslint-compat-test.js
+
       - name: Check out pinned embedded ABI source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -256,7 +259,9 @@ jobs:
   # sign it on install and renew it there (README, iOS).
   ios:
     name: Build iOS app (unsigned IPA)
-    runs-on: macos-15
+    # The macos-15 ARM64 pool can exhaust capacity before a job starts.
+    # Build the same generic iOS device target on the standard Intel pool.
+    runs-on: macos-15-intel
     timeout-minutes: 45
     permissions:
       contents: read
@@ -454,10 +459,17 @@ jobs:
   # that happens once per version, on a tag or an attach run only. Every other
   # run keeps the unsigned package, which Firefox loads only as a temporary
   # add-on (about:debugging) or in Developer Edition and Nightly.
+  #
+  # A release whose signing fails ships the unsigned package instead, with no
+  # update manifest: 0.3.7 lost its Firefox package to a Forbidden from
+  # addons.mozilla.org, and a package to sideload beats none.
   firefox:
     name: Build Firefox add-on
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    outputs:
+      xpi: ${{ steps.package.outputs.xpi || steps.fallback.outputs.xpi }}
+      signed: ${{ steps.package.outcome == 'success' }}
     permissions:
       contents: read
       id-token: write
@@ -511,6 +523,7 @@ jobs:
       - name: Sign it and write the update manifest
         id: package
         if: env.RELEASING == 'true' && inputs.platforms != 'ios' && inputs.platforms != 'android'
+        continue-on-error: true
         env:
           WEB_EXT_API_KEY: ${{ secrets.WEB_EXT_API_KEY }}
           WEB_EXT_API_SECRET: ${{ secrets.WEB_EXT_API_SECRET }}
@@ -538,23 +551,36 @@ jobs:
           XPI="$xpi" VERSION="$version" REPOSITORY="$GITHUB_REPOSITORY" node utils/firefox-updates.js
           printf 'xpi=%s\n' "$xpi" >> "$GITHUB_OUTPUT"
 
+      - name: Package it unsigned when signing fails
+        id: fallback
+        if: env.RELEASING == 'true' && inputs.platforms != 'ios' && inputs.platforms != 'android' && steps.package.outcome != 'success'
+        shell: bash
+        run: |
+          echo "::warning::Signing failed; the release gets the unsigned Firefox add-on."
+          version="$(node -p "require('./build-firefox/manifest.json').version")"
+          xpi="syrius-extension-${version}-firefox-unsigned.xpi"
+          npx --yes web-ext@10.7.0 build --source-dir build-firefox \
+            --artifacts-dir "$RUNNER_TEMP/unsigned" --filename "$xpi"
+          cp "$RUNNER_TEMP/unsigned/$xpi" "$xpi"
+          printf 'xpi=%s\n' "$xpi" >> "$GITHUB_OUTPUT"
+
       - name: Attest Firefox release package
         if: env.RELEASING == 'true' && inputs.platforms != 'ios' && inputs.platforms != 'android'
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          subject-path: ${{ steps.package.outputs.xpi }}
+          subject-path: ${{ steps.package.outputs.xpi || steps.fallback.outputs.xpi }}
 
       - name: Upload Firefox add-on artifact
         if: env.RELEASING == 'true' && inputs.platforms != 'ios' && inputs.platforms != 'android'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          path: ${{ steps.package.outputs.xpi }}
+          path: ${{ steps.package.outputs.xpi || steps.fallback.outputs.xpi }}
           if-no-files-found: error
           retention-days: 30
           archive: false
 
       - name: Upload Firefox update manifest artifact
-        if: env.RELEASING == 'true' && inputs.platforms != 'ios' && inputs.platforms != 'android'
+        if: env.RELEASING == 'true' && inputs.platforms != 'ios' && inputs.platforms != 'android' && steps.package.outcome == 'success'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: firefox-updates.json
@@ -688,11 +714,13 @@ jobs:
       - name: Download Firefox add-on
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: syrius-extension-${{ needs.build.outputs.manifest_version }}-firefox.xpi
+          name: ${{ needs.firefox.outputs.xpi }}
           path: release-assets
           skip-decompress: true
 
+      # Only a signed add-on has one: an unsigned add-on cannot update itself.
       - name: Download Firefox update manifest
+        if: needs.firefox.outputs.signed == 'true'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: firefox-updates.json
@@ -706,16 +734,22 @@ jobs:
           GH_REPO: ${{ github.repository }}
           TAG_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.attach_to || (startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v{0}', needs.build.outputs.manifest_version)) }}
           MANIFEST_VERSION: ${{ needs.build.outputs.manifest_version }}
-          XPI: syrius-extension-${{ needs.build.outputs.manifest_version }}-firefox.xpi
+          XPI: ${{ needs.firefox.outputs.xpi }}
+          SIGNED: ${{ needs.firefox.outputs.signed }}
         shell: bash
         run: |
           if [[ "$TAG_NAME" != "v${MANIFEST_VERSION}" ]]; then
             echo "::error::This checkout is ${MANIFEST_VERSION}; it cannot add packages to $TAG_NAME."
             exit 1
           fi
-          test "$XPI" = "syrius-extension-${MANIFEST_VERSION}-firefox.xpi" && test -f "$XPI" && test -f updates.json
+          if [[ "$SIGNED" == 'true' ]]; then
+            test "$XPI" = "syrius-extension-${MANIFEST_VERSION}-firefox.xpi" && test -f "$XPI" && test -f updates.json
+          else
+            test "$XPI" = "syrius-extension-${MANIFEST_VERSION}-firefox-unsigned.xpi" && test -f "$XPI"
+          fi
           sha256sum "$XPI" > "${XPI}.sha256"
-          assets=("$XPI" "${XPI}.sha256" updates.json)
+          assets=("$XPI" "${XPI}.sha256")
+          if [[ "$SIGNED" == 'true' ]]; then assets+=(updates.json); fi
 
           existing="$(gh release view "$TAG_NAME" --json assets --jq '.assets[].name')"
           for asset in "${assets[@]}"; do

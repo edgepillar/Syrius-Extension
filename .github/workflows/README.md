@@ -1,6 +1,15 @@
 # GitHub Actions workflow notes
 
-The executable workflow is `build-and-release.yml` in this directory.
+The executable workflows are `build-and-release.yml` and `codeql.yml` in this
+directory.
+
+`codeql.yml` is code scanning's advanced setup: Actions and JavaScript without a
+build, and Java from a real Gradle compile. Java runs `npx cap sync android`
+first, because `android/app/capacitor.build.gradle` imports the generated
+`capacitor-cordova-android-plugins/cordova.variables.gradle`, which is not in
+the tree. Without it the scan fell back to guessed dependencies and resolved
+20% of call targets (#71). Code scanning's default setup must stay off: GitHub
+refuses advanced uploads while it is on.
 
 It builds the Manifest V3 extension with Node.js 24, runs the dependency audit,
 lint checks, pinned Go-source ABI comparison, validation failure-path checks,
@@ -15,6 +24,18 @@ artifacts without an automatic release. A matching version tag provides the
 alternate release path. The workflow verifies that the tag matches the manifest
 version before building. A successful master run alone does not publish an
 update.
+
+The unsigned iOS job uses the standard `macos-15-intel` runner. The `macos-15`
+label selects the ARM64 pool, where validation jobs have failed to acquire a
+runner before any build step ran. The Intel host still builds the generic iOS
+device target; its host architecture does not turn the IPA into a simulator
+build. Runner availability remains a GitHub service dependency.
+
+The flat lint config uses ESLint's `@eslint/compat` adapter for legacy plugin
+context APIs. The lint compatibility control exercises the installed React,
+hooks, accessibility and import rules and confirms that their diagnostics remain
+enabled, alongside a clean JSX control. It runs with the candidate's installed
+ESLint version, including dependency-upgrade PRs.
 
 Both release paths refuse an existing release for the version tag. Rerunning a
 tag workflow cannot replace an already published ZIP or checksum; publish a

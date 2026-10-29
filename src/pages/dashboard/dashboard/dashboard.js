@@ -14,6 +14,7 @@ import useTransactions from '../../../services/hooks/useTransactions';
 import useDelayedFlag from '../../../services/hooks/useDelayedFlag';
 import usePriceFeed from '../../../services/hooks/usePriceFeed';
 import useChainChange from '../../../services/hooks/useChainChange';
+import usePullToRefresh from '../../../services/hooks/usePullToRefresh';
 import { receiveOnce } from '../../../services/wallet/outgoingWatch';
 import { hostReady, hostReceive, onHostState } from '../../../services/wallet/blockService';
 import vault from '../../../services/wallet/vault';
@@ -43,6 +44,8 @@ import {
 // had not asked for and could not stop. Receiving is still offered, and still
 // happens on its own when the setting is on, but it is bounded, it says what it
 // is doing, and it never blocks the first paint.
+
+const historyPollMs = 3000;
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -82,7 +85,6 @@ const Dashboard = () => {
   // depended on nothing would close over a stale `loadMore`.
   const {
     loadMore: loadMoreTransactions,
-    reset: resetTransactions,
     refreshNewest: refreshNewestTransactions,
     hasPending,
   } = transactions;
@@ -136,6 +138,12 @@ const Dashboard = () => {
     }
   }, [addressObject]);
 
+  const clearObserved = useCallback((observation) => {
+    if (!observation?.isCurrent()) return;
+    const { owner, network, hashes } = observation;
+    dispatch(clearSettledTransactions({ owner, network, hashes }));
+  }, [dispatch]);
+
   const receive = useCallback(async () => {
     if (!addressObject || isReceiving) {
       return;
@@ -169,7 +177,7 @@ const Dashboard = () => {
       // No toast: the received blocks appear in the list below.
       if (received > 0) {
         await refresh({ quiet: true });
-        resetTransactions();
+        refreshNewestTransactions().then(clearObserved, () => {});
       }
       await refreshPending();
     } catch (err) {
@@ -180,7 +188,7 @@ const Dashboard = () => {
       setReceiveProgress('');
       setReceivingBlock(null);
     }
-  }, [addressObject, isReceiving, refresh, refreshPending, resetTransactions]);
+  }, [addressObject, isReceiving, refresh, refreshPending, refreshNewestTransactions, clearObserved]);
 
   // Auto-receive is a setting now, and runs once per mount rather than on every
   // render pass that happened to re-enter the effect.
@@ -208,9 +216,15 @@ const Dashboard = () => {
       if (getSettings().autoReceive) receive();
       return;
     }
-    refreshNewestTransactions();
+    refreshNewestTransactions().then(clearObserved, () => {});
     refresh({ quiet: true });
   });
+
+  const puller = usePullToRefresh(() => Promise.allSettled([
+    refresh({ quiet: true }),
+    refreshNewestTransactions().then(clearObserved),
+    refreshPending(),
+  ]));
 
   // Infinite scroll, observing a sentinel at the end of the list.
   useEffect(() => {
@@ -260,7 +274,7 @@ const Dashboard = () => {
       }
     };
     observe();
-    const timer = setInterval(observe, 8000);
+    const timer = setInterval(observe, historyPollMs);
 
     return () => {
       cancelled = true;
@@ -276,12 +290,12 @@ const Dashboard = () => {
       return undefined;
     }
     const timer = setInterval(() => {
-      refreshNewestTransactions();
+      refreshNewestTransactions().then(clearObserved, () => {});
       refresh({ quiet: true });
-    }, 8000);
+    }, historyPollMs);
 
     return () => clearInterval(timer);
-  }, [hasPending, hasSettled, refreshNewestTransactions, refresh]);
+  }, [hasPending, hasSettled, refreshNewestTransactions, refresh, clearObserved]);
 
   const toggleHidden = async () => {
     try {
@@ -332,7 +346,19 @@ const Dashboard = () => {
   const renderUsd = (value) => (hideBalances ? '••••' : formatUsd(value));
 
   return (
-    <div className="page">
+    <div
+      ref={puller.ref}
+      className={`page dashboard-page ${puller.dragging ? 'is-pulling' : ''}`}
+      style={puller.pull ? { transform: `translateY(${puller.pull}px)` } : undefined}
+    >
+      <div
+        className={`pull-refresh ${puller.armed ? 'is-armed' : ''} ${puller.refreshing ? 'is-refreshing' : ''}`}
+        style={{ opacity: puller.progress, '--pull-turn': `${puller.progress * 270}deg` }}
+        role={puller.refreshing ? 'status' : undefined}
+        aria-label={puller.refreshing ? 'Refreshing' : undefined}
+      >
+        <Icon name="refresh" size={18} />
+      </div>
       {zapBurst > 0 && (
         <div className="zap-burst" key={zapBurst} aria-hidden="true">
           {Array.from({ length: 12 }, (_, spark) => <span key={spark} style={{ '--spark': spark }} />)}
@@ -347,7 +373,7 @@ const Dashboard = () => {
         <div className="balance-head">
           <span className="ledger-label">Balance</span>
           {totalUsdValue !== null && (
-            <span className="balance-total" title="ZNN + QSR at CoinGecko's price">
+            <span className="balance-total" title="ZNN + QSR at market price">
               ≈ {renderUsd(totalUsdValue)}
             </span>
           )}

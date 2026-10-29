@@ -66,9 +66,10 @@ known, and all of a wallet's records are deleted when the wallet is removed.
   The node receives those requests and the connection's network metadata,
   including the IP address. Operators may log requests. Signed transactions
   published to the blockchain are public.
-- **CoinGecko:** USD price requests identify the supported ZNN and QSR tokens.
-  The price URL does not include a wallet address or balance. CoinGecko still
-  receives the connection's network metadata, including the IP address.
+- **CoinGecko and GeckoTerminal:** USD price requests identify ZNN (CoinGecko)
+  and wrapped QSR on Ethereum (GeckoTerminal, run by CoinGecko). The price URLs
+  do not include a wallet address or balance. Both still receive the
+  connection's network metadata, including the IP address.
 - **GitHub:** the lock screen and Settings, About ask GitHub's public API for
   this repository's newest release tag. A valid release-version response is cached
   locally for six hours when storage succeeds; an unsuccessful check or failed
