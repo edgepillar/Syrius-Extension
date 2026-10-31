@@ -175,7 +175,7 @@ const fixture = () => {
       if (id === 'react-router-dom') return { useNavigate: () => navigateStub };
       if (id === 'react-redux') return { useSelector: select => select(state) };
       if (id === './vault' || id.endsWith('/wallet/vault')) return { __esModule: true, default: vault };
-      if (id === './useAccount' || id.endsWith('/hooks/useAccount')) return { __esModule: true, default: () => ({ balanceMap: { [token.toString()]: { balance: BigNumber.from('1000000000'), token: { decimals: 8, symbol: 'ZNN' } } } }), invalidateAccountCache() {} };
+      if (id === './useAccount' || id.endsWith('/hooks/useAccount')) return { __esModule: true, default: () => ({ balanceMap: { [token.toString()]: { balance: BigNumber.from('1000000000'), token: { decimals: 8, symbol: 'ZNN' } } } }), invalidateAccountCache() {}, markAccountStale() {} };
       if (id.endsWith('/utils/notify')) return { notify: { success: value => notices.push({ success: value }), error: value => notices.push({ error: String(value) }) } };
     });
     const Component = uiLoad('src/layouts/siteIntegrationLayout/siteIntegrationLayout.js').default;
