@@ -6,7 +6,7 @@ Keys are generated and encrypted on your machine and never leave it. The
 extension talks to a Zenon node of your choosing, and to web pages through an
 injected provider that does nothing without being asked first.
 
-Version **0.3.8**, Manifest V3, Chrome or Brave 112 or later, Firefox 140 or
+Version **0.3.9**, Manifest V3, Chrome or Brave 112 or later, Firefox 140 or
 later, and Android and iOS apps built from the same source. [What changed](CHANGELOG.md).
 
 ## Features
