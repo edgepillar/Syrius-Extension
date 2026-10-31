@@ -860,7 +860,7 @@ test('outgoing watch: mounted for every tab screen, silent on Home, and each scr
   assert.ok(component.includes("if (home.current || !getSettings().autoReceive) return;"), 'Home receives for itself; elsewhere only with the setting on');
   assert.ok(component.includes('receiveOnce(async () =>'));
   for (const event of ["emitChainChange('confirmed')", "emitChainChange('incoming')", "emitChainChange('received')"]) assert.ok(component.includes(event), event);
-  assert.ok(component.includes('invalidateAccountCache();'), 'balances are read again on every screen');
+  assert.ok(component.includes('markAccountStale();'), 'balances are read again on every screen');
   assert.ok(!/setInterval\([^)]*\)\s*;?\s*$/m.test(component.split('if (!isWaiting) return undefined;')[0]), 'nothing is polled while nothing is in flight');
 
   const home = read('src/pages/dashboard/dashboard/dashboard.js');

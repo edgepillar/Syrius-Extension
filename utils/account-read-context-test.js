@@ -251,6 +251,24 @@ const fixture = () => {
     assert.equal(warm.balanceMap, current.balanceMap);
     f.cleanup();
   }
+  {
+    const f = fixture(), gate = deferred();
+    await f.account().refresh(); assert.deepEqual(f.account().balances, ['initial']);
+    f.zenon.ledger.getAccountInfoByAddress = () => gate.promise;
+    const before = f.account().refresh(); await flush();
+    f.load('src/services/hooks/useAccount.js').markAccountStale();
+    gate.resolve(result('pre-change'));
+    assert.equal(await before, null, 'a read from before the chain change is dropped');
+    const held = f.account();
+    assert.deepEqual(held.balances, ['initial'], 'a stale mark keeps the last balances on screen');
+    assert.equal(held.isLoading, false);
+    assert.deepEqual(f.newAccount().balances, ['initial']);
+    f.zenon.ledger.getAccountInfoByAddress = async () => result('after');
+    await f.account().refresh(); assert.deepEqual(f.account().balances, ['after']);
+    f.load('src/services/hooks/useAccount.js').invalidateAccountCache();
+    assert.deepEqual(f.account().balances, [], 'invalidation still clears');
+    f.cleanup();
+  }
   // Pagination: stale empty/success/error/finally callbacks neither append rows
   // nor change the new account's error, continuation or loading ownership.
   for (const transition of [...transitions, 'reset', 'unmount']) {

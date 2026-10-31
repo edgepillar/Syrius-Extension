@@ -7,7 +7,17 @@ import { fail } from '../../services/utils/errors';
 const pendingKey = 'znn.pendingRequests', windowKey = 'znn.approvalWindowId', attentionKey = 'znn.approvalAttention';
 const own = (pending, id) => Object.hasOwn(pending, id) ? pending[id] : null;
 const readPending = async () => (await chrome.storage.session.get(pendingKey))[pendingKey] || {};
-const writePending = pending => chrome.storage.session.set({ [pendingKey]: pending });
+const waitingCount = pending => Object.values(pending).filter(request => !request.claimId).length;
+const showWaiting = count => {
+  const badge = globalThis.chrome?.action || globalThis.chrome?.browserAction;
+  if (!badge?.setBadgeText) return;
+  Promise.resolve().then(() => Promise.all([badge.setBadgeBackgroundColor?.({ color: '#00D557' }),
+    badge.setBadgeText({ text: count ? String(count) : '' })])).catch(() => {});
+};
+const writePending = async pending => {
+  await chrome.storage.session.set({ [pendingKey]: pending });
+  showWaiting(waitingCount(pending));
+};
 let expiredHandler = async () => {};
 const onExpired = handler => { expiredHandler = handler; };
 // Lock order is window -> pending. No lock spans user input, RPC, signing or
@@ -62,12 +72,18 @@ const add = request => {
 };
 const isOwner = (request, identity) => matchesApproval(request, identity) &&
   typeof identity.claimId === 'string' && identity.claimId.length > 0 && request.claimId === identity.claimId;
-const claim = (identity, windowId) => serialized(async pending => {
-  const request = own(pending, identity?.id);
-  if (!matchesApproval(request, identity) || request.claimId || !Number.isInteger(request.windowId) || !Number.isInteger(windowId)) return null;
-  request.claimId = crypto.randomUUID(); request.windowId = windowId;
-  await writePending(pending);
-  return { ...identityOf(request), claimId: request.claimId };
+// A page probe can finish after its approval window closed. Serialize the
+// window check and claim with closure so it cannot miss a newly admitted claim.
+const claim = (identity, windowId) => withWindow(async () => {
+  if (!Number.isInteger(windowId)) return null;
+  try { await chrome.windows.get(windowId); } catch (error) { return null; }
+  return serialized(async pending => {
+    const request = own(pending, identity?.id);
+    if (!matchesApproval(request, identity) || request.claimId || !Number.isInteger(request.windowId)) return null;
+    request.claimId = crypto.randomUUID(); request.windowId = windowId;
+    await writePending(pending);
+    return { ...identityOf(request), claimId: request.claimId };
+  });
 });
 const checkClaim = identity => serialized(pending => isOwner(own(pending, identity?.id), identity));
 const remove = (identity, requireClaim) => serialized(async pending => {
@@ -197,6 +213,9 @@ const openWindow = async (origin, tabId) => {
   // Persist the attention decision before opening. A failed browser operation
   // may require a cooldown retry, but cannot allow repeated opening attempts.
   await writeAttention(state);
+  return createWindow();
+};
+const createWindow = async () => {
   let position = {};
   try {
     const current = await chrome.windows.getLastFocused();
@@ -224,6 +243,32 @@ const closeWindow = windowId => withWindow(async () => {
     return removed;
   });
 });
+const parkWindow = windowId => withWindow(async () => {
+  if (await getWindowId() === windowId) await setWindowId(null);
+  return serialized(async pending => {
+    const removed = Object.values(pending).filter(request => request.windowId === windowId && request.claimId);
+    for (const request of removed) delete pending[request.id];
+    if (removed.length) await writePending(pending);
+    return removed;
+  });
+});
+const parked = pending => Object.values(pending).filter(request => !request.claimId && Number.isInteger(request.windowId));
+const reopen = () => withWindow(async () => {
+  if (!(await serialized(pending => parked(pending).length))) return false;
+  let windowId = await getWindowId();
+  if (windowId !== null) {
+    try {
+      await chrome.windows.get(windowId);
+      await Promise.resolve(chrome.windows.update?.(windowId, { focused: true })).catch(() => {});
+    } catch (error) { windowId = null; await setWindowId(null); }
+  }
+  if (windowId === null) windowId = await createWindow();
+  await serialized(async pending => {
+    for (const request of parked(pending)) request.windowId = windowId;
+    await writePending(pending);
+  });
+  return true;
+});
 const requests = { pendingKey, windowKey, attentionKey, list, oldest, get, add, claim, checkClaim, resolve, reject,
-  attachWindow, present, closeWindow, forgetTab, prune, onExpired, allowFollowup, nextFor, cancelWhere, current, cancelDocument };
+  attachWindow, present, closeWindow, parkWindow, reopen, forgetTab, prune, onExpired, allowFollowup, nextFor, cancelWhere, current, cancelDocument };
 export default requests;

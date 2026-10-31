@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { startBackgroundReceive } from '../../services/wallet/backgroundReceive';
 import { emitChainChange } from '../../services/wallet/chainEvents';
-import { invalidateAccountCache } from '../../services/hooks/useAccount';
+import { markAccountStale } from '../../services/hooks/useAccount';
 import { hostReady } from '../../services/wallet/blockService';
 
 // Receives incoming blocks every 30 s while the tab screens are up, on every
@@ -12,7 +12,7 @@ const BackgroundReceive = () => {
   useEffect(() => startBackgroundReceive({
     ready: async () => !(await hostReady()),
     onReceived: () => {
-      invalidateAccountCache();
+      markAccountStale();
       emitChainChange('received');
     },
   }), []);

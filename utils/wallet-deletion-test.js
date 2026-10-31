@@ -67,7 +67,7 @@ const fixture = async () => {
       // before it locks; the stand-in records that it was asked.
       if (id.endsWith('/utils/messaging')) return { sendInternalQuietly: async () => true,
         sendInternal: async method => { events.push(method); return true; } };
-      if (id.endsWith('/hooks/useAccount')) return { invalidateAccountCache: () => events.push('cache cleared') };
+      if (id.endsWith('/hooks/useAccount')) return { invalidateAccountCache: () => events.push('cache cleared'), markAccountStale() {} };
       if (id.endsWith('/components/change-address-item/change-address-item')) return { __esModule: true, default: 'address-item' };
       if (id.endsWith('/wallet/announce') && !filename.endsWith('lock.js')) return { announceAddress: async () => {} };
       if (!id.startsWith('.')) return require(id);

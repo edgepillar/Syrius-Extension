@@ -314,7 +314,7 @@ const dashboardFixture = (history, options = {}) => {
       if (name.endsWith('/wallet/blockJobs')) {
         return { __esModule: true, default: (job, { onPow } = {}) => f.zenon.send(job.templates[0], {}, onPow) };
       }
-      if (name === './useAccount') return { invalidateAccountCache: () => {} };
+      if (name === './useAccount') return { invalidateAccountCache: () => {}, markAccountStale: () => {} };
       if (name.endsWith('/utils/notify')) return { notify: { success: () => {}, error: () => {} } };
       if (name.endsWith('/utils/errors')) return { readableError: String };
       if (name.endsWith('/utils/outgoingBlock')) return { describeOutgoingTemplate: () => ({}) };

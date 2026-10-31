@@ -260,7 +260,7 @@ const approvalUI = (f, windowId) => {
     if (id === 'react-router-dom') return { useNavigate: () => navigate };
     if (id === 'react-redux') return { useSelector: selector => selector(state) };
     if (id.endsWith('/wallet/vault') || id === './vault') return { __esModule: true, default: vault };
-    if (id.endsWith('/hooks/useAccount') || id === './useAccount') return { __esModule: true, default: () => ({ balanceMap: { [token.toString()]: { balance: BigNumber.from('1000000000'), token: { decimals: 8, symbol: 'ZNN' } } } }), invalidateAccountCache() {} };
+    if (id.endsWith('/hooks/useAccount') || id === './useAccount') return { __esModule: true, default: () => ({ balanceMap: { [token.toString()]: { balance: BigNumber.from('1000000000'), token: { decimals: 8, symbol: 'ZNN' } } } }), invalidateAccountCache() {}, markAccountStale() {} };
     if (id.endsWith('/utils/notify')) return { notify: { success: value => counters.notices.push({ success: value }), error: value => counters.notices.push({ error: String(value) }) } };
   });
   const Component = load('src/layouts/siteIntegrationLayout/siteIntegrationLayout.js').default;

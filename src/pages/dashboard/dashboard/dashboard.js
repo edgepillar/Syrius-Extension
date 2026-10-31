@@ -26,7 +26,7 @@ import {
   qsrZts,
 } from '../../../services/wallet/account';
 import { describePendingBlock } from '../../../services/utils/outgoingBlock';
-import { formatAmount, formatExact, formatUsd } from '../../../services/utils/format';
+import { formatAmount, formatExact, formatUsd, toBigNumber } from '../../../services/utils/format';
 import { notify } from '../../../services/utils/notify';
 import { updateSetting } from '../../../services/wallet/preferences';
 import { getSettings } from '../../../services/utils/storage';
@@ -46,6 +46,20 @@ import {
 // is doing, and it never blocks the first paint.
 
 const historyPollMs = 3000;
+
+const useBalanceChange = (balance, owner, isHidden) => {
+  const last = useRef({ owner, value: null });
+  const [change, setChange] = useState({ direction: '', round: 0 });
+  const value = balance === undefined ? null : toBigNumber(balance).toString();
+  useEffect(() => {
+    const previous = last.current;
+    last.current = { owner, value };
+    if (isHidden || previous.owner !== owner || previous.value === null || value === null || previous.value === value) return;
+    const direction = toBigNumber(value).gt(toBigNumber(previous.value)) ? 'is-up' : 'is-down';
+    setChange((current) => ({ direction, round: current.round + 1 }));
+  }, [value, owner, isHidden]);
+  return change;
+};
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -306,6 +320,8 @@ const Dashboard = () => {
 
   const znn = balanceMap[znnZts];
   const qsr = balanceMap[qsrZts];
+  const znnChange = useBalanceChange(znn?.balance, address, hideBalances);
+  const qsrChange = useBalanceChange(qsr?.balance, address, hideBalances);
 
   // For display only: whether to actually show a "Loading…" label at the
   // bottom of the list. See `useDelayedFlag`.
@@ -386,7 +402,7 @@ const Dashboard = () => {
             onClick={toggleHidden}
             title={hideBalances ? 'Show balances' : 'Hide balances'}
           >
-            <span className="balance-amount" title={formatExact(znn?.balance, znn?.token?.decimals)}>
+            <span key={znnChange.round} className={`balance-amount ${znnChange.direction}`} title={formatExact(znn?.balance, znn?.token?.decimals)}>
               {renderBalance(znn)}
             </span>
             <span className="balance-meta">
@@ -403,7 +419,7 @@ const Dashboard = () => {
             onClick={toggleHidden}
             title={hideBalances ? 'Show balances' : 'Hide balances'}
           >
-            <span className="balance-amount" title={formatExact(qsr?.balance, qsr?.token?.decimals)}>
+            <span key={qsrChange.round} className={`balance-amount ${qsrChange.direction}`} title={formatExact(qsr?.balance, qsr?.token?.decimals)}>
               {renderBalance(qsr)}
             </span>
             <span className="balance-meta">

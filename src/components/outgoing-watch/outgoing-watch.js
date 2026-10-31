@@ -6,7 +6,7 @@ import { Primitives } from 'znn-ts-sdk';
 import Icon from '../icon/icon';
 import PowCountdown from '../pow-countdown/pow-countdown';
 import useReadContext from '../../services/hooks/useReadContext';
-import { invalidateAccountCache } from '../../services/hooks/useAccount';
+import { markAccountStale } from '../../services/hooks/useAccount';
 import vault from '../../services/wallet/vault';
 import { countPendingBlocks, receivePendingBlocks } from '../../services/wallet/account';
 import { emitChainChange } from '../../services/wallet/chainEvents';
@@ -74,7 +74,7 @@ const OutgoingWatch = () => {
       const confirmed = await tracker.current.check(readBlock);
       if (cancelled || !confirmed.length) return;
       // The balance on screen is now stale by definition, on any screen.
-      invalidateAccountCache();
+      markAccountStale();
       emitChainChange('confirmed');
       redraw();
       // "Confirmed" is shown for a moment and then goes. Not tied to this
@@ -126,7 +126,7 @@ const OutgoingWatch = () => {
           receivePendingBlocks(context.zenon, await vault.getSigningKeyPair(), addressObject));
         // No toast: receiving is block work, and Home's list shows the result.
         if (received > 0) {
-          invalidateAccountCache();
+          markAccountStale();
           emitChainChange('received');
         }
       } catch (error) {

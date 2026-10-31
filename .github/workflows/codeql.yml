@@ -80,3 +80,26 @@ jobs:
         uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           category: /language:${{ matrix.language }}
+          upload: never
+          output: sarif-results
+
+      - name: Drop results in third-party packages
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=(sarif-results/*.sarif)
+          test ${#files[@]} -gt 0
+          for file in "${files[@]}"; do
+            jq '.runs |= map(.results |= map(select(
+              [.locations[]?.physicalLocation.artifactLocation.uri // ""] as $uris
+              | ($uris | length > 0) and ($uris | all(startswith("node_modules/")))
+              | not)))' "$file" > "$file.kept"
+            echo "$file: $(jq '[.runs[].results[]] | length' "$file") results, $(jq '[.runs[].results[]] | length' "$file.kept") kept"
+            mv "$file.kept" "$file"
+          done
+
+      - name: Upload results
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: sarif-results
+          category: /language:${{ matrix.language }}

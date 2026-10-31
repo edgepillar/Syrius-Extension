@@ -8,7 +8,7 @@ import sendApprovalBlock from '../wallet/approvalBlock';
 import { beginPreparedSend } from '../wallet/blockApproval';
 import journal from '../wallet/journal';
 import sendJournaled from '../wallet/publisher';
-import { invalidateAccountCache } from './useAccount';
+import { markAccountStale } from './useAccount';
 import { fail } from '../utils/errors';
 
 // Signing and broadcasting one account block, for the one caller that has to
@@ -107,7 +107,7 @@ const useBlockSender = () => {
         : await sendJournaled(zenon, template, await vault.getSigningKeyPair(addressIndex), { onPow: progress });
 
       // The balance on screen is now stale by definition.
-      invalidateAccountCache();
+      markAccountStale();
       await assertRequest?.();
       return signed;
     } catch (error) {

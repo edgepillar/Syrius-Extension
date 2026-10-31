@@ -6,7 +6,7 @@ import vault from '../wallet/vault';
 import { captureHistoryNetwork } from '../wallet/historyObservation';
 import runBlockJob from '../wallet/blockJobs';
 import { hostReady, hostSend } from '../wallet/blockService';
-import { invalidateAccountCache } from './useAccount';
+import { markAccountStale } from './useAccount';
 import { readableError } from '../utils/errors';
 import { describeOutgoingTemplate } from '../utils/outgoingBlock';
 import {
@@ -93,7 +93,7 @@ const useBackgroundSender = () => {
           const signed = send ? await send() : await runBlockJob({ kind, symbols, addressIndex: index, templates: blocks }, { onPow });
 
           // The balance on screen is now stale by definition.
-          invalidateAccountCache();
+          markAccountStale();
           dispatch(
             updatePendingTransaction({
               id,

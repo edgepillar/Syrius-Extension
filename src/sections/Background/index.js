@@ -243,6 +243,7 @@ const requestAllowed = async (record, request) => selection.matches(record, requ
   (request.type === 'connect' || await permissions.isConnected(request.origin, request.binding.scope));
 const internalMethods = {
   'approvals.list': () => requests.list(),
+  'approvals.reopen': () => requests.reopen(),
   'approvals.next': ({ binding }) => selection.transaction(async stored => {
     const record = selection.current(stored);
     selection.assert(record, binding, true);
@@ -441,19 +442,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // Housekeeping
 //
 
-// Closing the approval window is an answer: it means no. Without this the page
-// waits forever on a promise nobody is ever going to settle.
-//
-// It answers for the requests THAT window was showing, and only those. The
-// queue as a whole is not the same thing: a site whose connect has just been
-// approved sends its next request immediately — that is what being connected is
-// for — and it arrives while this window is closing, having been drawn to
-// nobody. Answering it "user rejected" told the page a person had declined a
-// prompt that never appeared, and it did so every time, on the first attempt,
-// for exactly the connect-then-sign shape every site uses.
 chrome.windows.onRemoved.addListener(async (windowId) => {
   try {
-    const abandoned = await requests.closeWindow(windowId);
+    const abandoned = await requests.parkWindow(windowId);
     // A claimed operation may already have reached publication. Closing its
     // window cannot promise cancellation or invite an automatic retry.
     await Promise.all(abandoned.map(request => respond(request, request.responseId, undefined,
