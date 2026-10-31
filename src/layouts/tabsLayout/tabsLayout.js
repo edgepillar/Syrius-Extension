@@ -14,6 +14,7 @@ import MenuHeader from '../../pages/menu/menu-header/menu-header';
 import MenuTabs from '../../pages/menu/menu-tabs/menu-tabs';
 import OutgoingWatch from '../../components/outgoing-watch/outgoing-watch';
 import JournalNotice from '../../components/journal-notice/journal-notice';
+import ApprovalInbox from '../../components/approval-inbox/approval-inbox';
 import AppWatch from '../../components/app-watch/app-watch';
 import BackgroundReceive from '../../components/background-receive/background-receive';
 import BlockSync from '../../components/block-sync/block-sync';
@@ -102,6 +103,7 @@ const TabsLayout = () => {
         {/* Here rather than on the dashboard: a block whose outcome is unknown
             holds up sending from every screen, and it is settled from
             whichever one happens to be open. */}
+        <ApprovalInbox />
         <JournalNotice address={address} refreshKey={inFlight} />
         <Routes location={location}>
           <Route index element={<Navigate to="/tabs/dashboard" replace />} />

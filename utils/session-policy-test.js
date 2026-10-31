@@ -158,7 +158,7 @@ const fixture = () => {
       if (id === 'react-hook-form') return { useForm: () => ({ register: () => ({}), handleSubmit: fn => fn, formState: { errors: {} }, setError: (...args) => notices.push(args), setValue() {} }) };
       if (id === 'znn-ts-sdk') return sdk;
       if (id.endsWith('/utils/notify')) return { notify: { dismissAll() {}, success: value => notices.push({ success: value }), error: value => notices.push({ error: String(value?.message || value) }) } };
-      if (id.endsWith('/hooks/useAccount')) return { invalidateAccountCache: () => events.push('cache cleared') };
+      if (id.endsWith('/hooks/useAccount')) return { invalidateAccountCache: () => events.push('cache cleared'), markAccountStale() {} };
       if (id.endsWith('/utils/devWallet')) return { isDevWalletBuild: false };
       if (/authLayout|tabsLayout|siteIntegrationLayout|dashboard-password|initial-node-selection|components\/splash/.test(id)) return { __esModule: true, default: () => null };
       // Services are the wallet realm's own instances, not fresh copies.

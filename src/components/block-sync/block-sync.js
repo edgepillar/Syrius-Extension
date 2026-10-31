@@ -4,7 +4,7 @@ import { useDispatch, useStore } from 'react-redux';
 import { hostForget, hostReady, onHostState } from '../../services/wallet/blockService';
 import { upsertPendingTransaction } from '../../services/redux/pendingTransactionsSlice';
 import { emitChainChange } from '../../services/wallet/chainEvents';
-import { invalidateAccountCache } from '../../services/hooks/useAccount';
+import { markAccountStale } from '../../services/hooks/useAccount';
 
 // The background page's blocks, on this popup's screens
 // (wallet/blockService.js). Its jobs become rows in the pending transactions,
@@ -30,7 +30,7 @@ const BlockSync = () => {
         dispatch(upsertPendingTransaction(job));
       });
       if (received.current !== null && state.received !== received.current) {
-        invalidateAccountCache();
+        markAccountStale();
         emitChainChange('received');
       }
       received.current = state.received;

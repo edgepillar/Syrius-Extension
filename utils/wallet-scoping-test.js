@@ -179,7 +179,7 @@ const fixture = () => {
       if (id === 'react-redux') return { useSelector: select => select(state) };
       if (id === 'znn-ts-sdk') return sdk;
       if (id === './vault' || id.endsWith('/wallet/vault')) return { __esModule: true, default: vault };
-      if (id === './useAccount' || id.endsWith('/hooks/useAccount')) return { __esModule: true, default: () => ({ balanceMap: {} }), invalidateAccountCache() {} };
+      if (id === './useAccount' || id.endsWith('/hooks/useAccount')) return { __esModule: true, default: () => ({ balanceMap: {} }), invalidateAccountCache() {}, markAccountStale() {} };
       if (id.endsWith('/utils/notify')) return { notify: { success: value => notices.push({ success: value }), error: value => notices.push({ error: String(value) }) } };
     });
     const Component = uiLoad('src/layouts/siteIntegrationLayout/siteIntegrationLayout.js').default;

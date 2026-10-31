@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.3.9
+
+New
+- A site's request is no longer lost when its approval window closes.
+  Closing the window leaves the request waiting until it is answered, its
+  page leaves or it expires (30 minutes). The toolbar icon shows how many
+  are waiting, and a banner on the wallet's screens opens them again.
+- Home's ZNN and QSR balances flash green when they rise and red when they
+  fall, then fade back.
+
+Fixed
+- Home's balances blanked for a moment each time a send confirmed or a
+  receive landed. The last figure now stays on screen while it is read
+  again. Locking, removing a wallet or changing address still clears it.
+
+Changed
+- Closing an approval window no longer rejects the request. Reject is the
+  way to decline. A request already being signed when its window closes
+  still ends with "outcome unknown".
+
 ## 0.3.8
 
 New

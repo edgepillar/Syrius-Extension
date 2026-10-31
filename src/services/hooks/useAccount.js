@@ -22,6 +22,8 @@ const cacheListeners = new Set();
 const sameKey = (left, right) => Boolean(left && right && left.context === right.context &&
   left.walletName === right.walletName && left.address === right.address && left.index === right.index &&
   left.revision === right.revision);
+const sameAccount = (left, right) => Boolean(left && right && left.context === right.context &&
+  left.walletName === right.walletName && left.address === right.address && left.index === right.index);
 
 const useAccount = ({ balances: wantBalances = true, refreshMs = 0 } = {}) => {
   const { walletName, address, selectedAddressIndex } = useSelector((state) => state.wallet);
@@ -35,7 +37,7 @@ const useAccount = ({ balances: wantBalances = true, refreshMs = 0 } = {}) => {
   }, []);
   const cacheKey = useMemo(() => ({ walletName, address, index: selectedAddressIndex, context: context.key, revision }),
     [walletName, address, selectedAddressIndex, context.key, revision]);
-  const isCacheWarm = context.available && sameKey(cache.key, cacheKey);
+  const isCacheWarm = context.available && sameAccount(cache.key, cacheKey);
 
   const [state, setState] = useState({
     key: cacheKey,
@@ -159,5 +161,10 @@ const invalidateAccountCache = () => {
   cacheListeners.forEach((listener) => listener());
 };
 
-export { useAccount, invalidateAccountCache };
+const markAccountStale = () => {
+  cache.revision += 1;
+  cacheListeners.forEach((listener) => listener());
+};
+
+export { useAccount, invalidateAccountCache, markAccountStale };
 export default useAccount;

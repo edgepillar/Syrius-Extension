@@ -309,9 +309,14 @@ const watchdog = setTimeout(() => { console.error('Request identity checks timed
     assert.equal(f.counts.created, 1); const rows = await f.queue.list();
     const unstamped = await f.queue.add(entry('arrival', 'doc-three'));
     await f.listeners.closedWindow(rows[0].windowId);
-    assert.deepEqual((await f.queue.list()).map(x => x.id), [unstamped.id]);
-    assert.deepEqual(f.delivered.slice(1).map(x => x.value.id).sort(), ['first', 'second']);
-    assert(f.delivered.slice(1).every(x => x.value.error.code === 4001), 'unclaimed closure remains rejection');
+    assert.equal((await f.queue.list()).length, 3, 'unclaimed closure parks the requests');
+    assert.equal(f.delivered.length, 1, 'closing the window answers nothing');
+    assert.equal(await f.internal('approvals.reopen'), true);
+    assert.equal(f.counts.created, 2);
+    const reopened = (await f.queue.list()).filter(x => x.id !== unstamped.id);
+    assert(reopened.every(x => x.windowId === 102), 'parked requests move to the reopened window');
+    assert.equal((await f.queue.get(unstamped.id)).windowId, undefined);
+    await f.queue.reject(f.identity.identityOf(rows[0])); await f.queue.reject(f.identity.identityOf(rows[1]));
     let callback = false;
     assert.equal(f.listeners.message({ channel: 'internal', method: 'approvals.list' }, f.sender(), () => { callback = true; }), false);
     assert.equal(callback, false);
