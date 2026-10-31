@@ -19,6 +19,9 @@ Changed
 - Closing an approval window no longer rejects the request. Reject is the
   way to decline. A request already being signed when its window closes
   still ends with "outcome unknown".
+- Waiting requests count toward a site's limit of two. While two are
+  waiting, the site's next request is refused as busy (`-32005`) until one
+  is answered.
 
 ## 0.3.8
 
