@@ -258,9 +258,8 @@ const reopen = () => withWindow(async () => {
   }
   if (windowId === null) windowId = await createWindow();
   await serialized(async pending => {
-    const moved = parked(pending).filter(request => request.windowId !== windowId);
-    for (const request of moved) request.windowId = windowId;
-    if (moved.length) await writePending(pending);
+    for (const request of parked(pending)) request.windowId = windowId;
+    await writePending(pending);
   });
   return true;
 });
