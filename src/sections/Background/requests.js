@@ -72,12 +72,18 @@ const add = request => {
 };
 const isOwner = (request, identity) => matchesApproval(request, identity) &&
   typeof identity.claimId === 'string' && identity.claimId.length > 0 && request.claimId === identity.claimId;
-const claim = (identity, windowId) => serialized(async pending => {
-  const request = own(pending, identity?.id);
-  if (!matchesApproval(request, identity) || request.claimId || !Number.isInteger(request.windowId) || !Number.isInteger(windowId)) return null;
-  request.claimId = crypto.randomUUID(); request.windowId = windowId;
-  await writePending(pending);
-  return { ...identityOf(request), claimId: request.claimId };
+// A page probe can finish after its approval window closed. Serialize the
+// window check and claim with closure so it cannot miss a newly admitted claim.
+const claim = (identity, windowId) => withWindow(async () => {
+  if (!Number.isInteger(windowId)) return null;
+  try { await chrome.windows.get(windowId); } catch (error) { return null; }
+  return serialized(async pending => {
+    const request = own(pending, identity?.id);
+    if (!matchesApproval(request, identity) || request.claimId || !Number.isInteger(request.windowId)) return null;
+    request.claimId = crypto.randomUUID(); request.windowId = windowId;
+    await writePending(pending);
+    return { ...identityOf(request), claimId: request.claimId };
+  });
 });
 const checkClaim = identity => serialized(pending => isOwner(own(pending, identity?.id), identity));
 const remove = (identity, requireClaim) => serialized(async pending => {

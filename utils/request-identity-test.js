@@ -324,6 +324,61 @@ const watchdog = setTimeout(() => { console.error('Request identity checks timed
     assert.equal((await f.provider('znn_connect', {}, 'unbound', { ...f.sender(), documentId: undefined }, false))?.accepted, false);
     assert.equal((await f.queue.list()).length, 1);
   }
+  // A claim may still be probing its page when the approval window closes.
+  // Its late reply cannot own a parked request or take it back after reopening.
+  for (const reopenFirst of [false, true]) {
+    const f = fixture(); f.connect();
+    await f.provider('znn_sign', message, 'closed-window-claim');
+    const row = await f.bindNext(), probing = deferred(), reply = deferred();
+    const send = f.chrome.tabs.sendMessage;
+    let held = false;
+    f.chrome.tabs.sendMessage = async (...args) => {
+      if (!held && args[1]?.kind === 'probe') {
+        held = true; probing.resolve(); await reply.promise;
+      }
+      return send(...args);
+    };
+    const claiming = f.internal('approvals.claim', { identity: f.identity.identityOf(row), windowId: row.windowId });
+    await probing.promise;
+    f.windows.delete(row.windowId);
+    await f.listeners.closedWindow(row.windowId);
+    if (reopenFirst) assert.equal(await f.internal('approvals.reopen'), true);
+    reply.resolve();
+    assert.equal(await claiming, null, 'a closed window cannot claim its parked request');
+    assert.equal((await f.queue.get(row.id)).claimId, undefined);
+    assert.equal(f.delivered.length, 0, 'the unclaimed request is still waiting');
+    assert.equal(f.counts.signs, 0); assert.equal(f.counts.publishes, 0);
+    if (!reopenFirst) assert.equal(await f.internal('approvals.reopen'), true);
+    const next = await f.bindNext();
+    assert.equal(next.id, row.id);
+    assert.notEqual(next.windowId, row.windowId);
+    const owner = await f.internal('approvals.claim', { identity: f.identity.identityOf(next), windowId: next.windowId });
+    assert(owner, 'the reopened window can still claim the same request');
+  }
+  // A window can disappear after its lookup started. Closing must wait for
+  // claim admission, then settle the claim as interrupted rather than orphan it.
+  {
+    const f = fixture(); f.connect();
+    await f.provider('znn_sign', message, 'window-closes-during-claim');
+    const row = await f.bindNext(), inspected = deferred(), resume = deferred();
+    const get = f.chrome.windows.get;
+    f.chrome.windows.get = async id => {
+      const found = await get(id);
+      if (id === row.windowId) { inspected.resolve(); await resume.promise; }
+      return found;
+    };
+    const claiming = f.internal('approvals.claim', { identity: f.identity.identityOf(row), windowId: row.windowId });
+    await inspected.promise;
+    f.windows.delete(row.windowId);
+    const closing = f.listeners.closedWindow(row.windowId);
+    resume.resolve();
+    await claiming; await closing;
+    assert.equal((await f.queue.list()).length, 0, 'closure removes the admitted claim');
+    assert.equal(f.delivered.length, 1);
+    assert.equal(f.delivered[0].value.error.code, -32603);
+    assert.match(f.delivered[0].value.error.message, /outcome is unknown/i);
+    assert.equal(f.counts.signs, 0); assert.equal(f.counts.publishes, 0);
+  }
   {
     const f = fixture();
     await f.provider('znn_sign', message, 'denied'); assert.equal(f.delivered[0].value.error.code, 4100);
