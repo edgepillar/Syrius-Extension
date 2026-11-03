@@ -70,10 +70,10 @@ known, and all of a wallet's records are deleted when the wallet is removed.
   and wrapped QSR on Ethereum (GeckoTerminal, run by CoinGecko). The price URLs
   do not include a wallet address or balance. Both still receive the
   connection's network metadata, including the IP address.
-- **GitHub:** the lock screen and Settings, About ask GitHub's public API for
+- **GitHub:** the lock screen, Home and Settings, About ask GitHub's public API for
   this repository's newest release tag. A valid release-version response is cached
   locally for six hours when storage succeeds; an unsuccessful check or failed
-  cache write can be retried on a later lock-screen or About visit. The request carries no
+  cache write can be retried on a later lock-screen, Home or About visit. The request carries no
   wallet data. GitHub receives the connection's network metadata, including the
   IP address.
 - **Updating an unpacked install:** pressing Update now downloads the release

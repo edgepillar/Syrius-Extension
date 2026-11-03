@@ -1611,6 +1611,51 @@ body.is-app .recipient-option {
   text-align: center;
 }
 
+.update-notice {
+  display: flex;
+  align-items: stretch;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--highlight) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--highlight) 25%, transparent);
+  color: var(--highlight);
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  animation: update-notice-in 240ms cubic-bezier(.2, .8, .2, 1);
+
+  button {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  button:hover,
+  button:focus-visible {
+    background: color-mix(in srgb, var(--highlight) 8%, transparent);
+  }
+}
+
+.update-notice-open {
+  flex: 1;
+  gap: 8px;
+  padding: 0 12px;
+  text-align: left;
+
+  > span {
+    flex: 1;
+  }
+}
+
+.update-notice-close {
+  justify-content: center;
+  width: 44px;
+  border-left: 1px solid color-mix(in srgb, var(--highlight) 20%, transparent);
+}
+
+@keyframes update-notice-in {
+  from { opacity: 0; transform: translateY(-6px); }
+}
+
 .activity {
   display: flex;
   flex-direction: column;
