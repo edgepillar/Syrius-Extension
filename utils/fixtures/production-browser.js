@@ -26,9 +26,10 @@ const findBrowser = () => {
   return executable;
 };
 
-const startBrowser = async ({ extensionDir, profileDir, setupScript = '' }) => {
+const startBrowser = async ({ extensionDir, profileDir, setupScript = '', expectedExtensionId }) => {
   if (!path.isAbsolute(extensionDir || '') || !path.isAbsolute(profileDir || '') ||
-      !fs.existsSync(path.join(extensionDir, 'manifest.json')) || typeof setupScript !== 'string') {
+      !fs.existsSync(path.join(extensionDir, 'manifest.json')) || typeof setupScript !== 'string' ||
+      (expectedExtensionId !== undefined && !/^[a-p]{32}$/.test(expectedExtensionId))) {
     throw failure('BROWSER_CONFIGURATION_INVALID');
   }
   const executable = findBrowser();
@@ -380,22 +381,27 @@ const startBrowser = async ({ extensionDir, profileDir, setupScript = '' }) => {
     };
     let installed = await matchingInstalls();
     if (installed.length > 1) throw failure('BROWSER_EXTENSION_AMBIGUOUS');
+    if (expectedExtensionId !== undefined && (installed.length !== 1 || installed[0].id !== expectedExtensionId)) {
+      throw failure('BROWSER_PERSISTENT_INSTALL_MISSING');
+    }
     if (installed.length === 1) {
       if (installed[0].enabled !== true) throw failure('BROWSER_EXTENSION_DISABLED');
       extensionId = installed[0].id;
       stats.persistentInstallReused = true;
     } else {
-      extensionId = (await cdp('Extensions.loadUnpacked', { path: extensionDir })).id;
-      if (!/^[a-p]{32}$/.test(extensionId || '')) throw failure('BROWSER_EXTENSION_UNAVAILABLE');
-      // Chrome discards CDP-installed registrations at its next startup. Use
-      // its ordinary developer reload before creating any test wallet data,
-      // then require the same enabled install to survive subsequent starts.
-      const reloaded = await evaluate(settings, 'new Promise(resolve => chrome.developerPrivate.reload(' +
-        JSON.stringify(extensionId) + ', {failQuietly:true,populateErrorForUnpacked:true}, result => resolve(!chrome.runtime.lastError && !result)))');
+      // Install through the same developer API as a directory dropped onto
+      // chrome://extensions. CDP's loadUnpacked marks an install as temporary;
+      // a later reload is not a reliable persistent-install boundary.
+      await cdp('Input.dispatchDragEvent', { type: 'dragEnter', x: 10, y: 10,
+        data: { items: [], files: [extensionDir], dragOperationsMask: 1 } }, settings.sessionId);
+      const loaded = await evaluate(settings, 'new Promise(resolve => { chrome.developerPrivate.notifyDragInstallInProgress(); chrome.developerPrivate.loadUnpacked({useDraggedPath:true,failQuietly:true,populateError:true}, result => resolve(!chrome.runtime.lastError && !result)); })');
+      await cdp('Input.dispatchDragEvent', { type: 'dragCancel', x: 10, y: 10,
+        data: { items: [], files: [], dragOperationsMask: 0 } }, settings.sessionId);
       installed = await matchingInstalls();
-      if (!reloaded || installed.length !== 1 || installed[0].id !== extensionId || installed[0].enabled !== true) {
+      if (!loaded || installed.length !== 1 || installed[0].enabled !== true) {
         throw failure('BROWSER_PERSISTENT_INSTALL_FAILED');
       }
+      extensionId = installed[0].id;
     }
     await closePage(settings);
     if (!/^[a-p]{32}$/.test(extensionId || '')) throw failure('BROWSER_EXTENSION_UNAVAILABLE');

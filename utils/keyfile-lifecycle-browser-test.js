@@ -26,13 +26,14 @@ const unsafeCharacters = {
 };
 const quote = (value) => JSON.stringify(value)
   .replace(/[<>\b\f\n\r\t\0\u2028\u2029]/g, (character) => unsafeCharacters[character]);
-let browser, browserStarting, page, phrase, stage = 'package validation';
+let browser, browserStarting, expectedExtensionId, page, phrase, stage = 'package validation';
 const results = [];
 const report = { package_version: null, package_tree_sha256: null, cases: results };
 const launch = async () => {
   if (report.interrupted) throw Object.assign(new Error('Test interrupted.'), { code: 'TEST_INTERRUPTED' });
-  browserStarting = startBrowser({ extensionDir, profileDir, setupScript });
+  browserStarting = startBrowser({ extensionDir, profileDir, setupScript, expectedExtensionId });
   try { browser = await browserStarting; } finally { browserStarting = null; }
+  expectedExtensionId ||= browser.id;
   if (report.interrupted) throw Object.assign(new Error('Test interrupted.'), { code: 'TEST_INTERRUPTED' });
 };
 const cleanup = () => cleanupPromise || (cleanupPromise = (async () => {
