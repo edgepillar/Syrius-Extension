@@ -2861,6 +2861,17 @@ button.settings-item {
 // its own top edge that fills over the two seconds it is up, instead of a
 // countdown tucked underneath, plus a small close button.
 .Toastify__toast.toast-successbar {
+  --toastify-color-progress-bgo: 0;
+
+  // Toastify wraps the timer in a progress container at the bottom.
+  // Move that container too, so the confirmation bar stays at the card's top.
+  .Toastify__progress-bar--wrp {
+    top: 0;
+    bottom: auto;
+    height: 3px;
+    border-radius: 0;
+  }
+
   // The progress bar sits at the top edge of the card and IS the "fills
   // green" indicator. Toastify's own bar drains — starts full and shrinks to
   // nothing as time runs out — so the animation is played in reverse to fill
