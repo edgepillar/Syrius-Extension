@@ -14,6 +14,10 @@ Fixed
 - Home's balances blanked for a moment each time a send confirmed or a
   receive landed. The last figure now stays on screen while it is read
   again. Locking, removing a wallet or changing address still clears it.
+- A window that had already closed could still claim its request (#84).
+- In the app, a reopened approval screen took the closed one's window ID,
+  so a late call for the old screen reached the new one. Each opening now
+  gets its own ID (#85).
 
 Changed
 - Closing an approval window no longer rejects the request. Reject is the
@@ -22,6 +26,16 @@ Changed
 - Waiting requests count toward a site's limit of two. While two are
   waiting, the site's next request is refused as busy (`-32005`) until one
   is answered.
+
+Build
+- Dependencies: react-toastify 11 (#91), style-loader 4 (#89),
+  source-map-loader 5 (#90), node-polyfill-webpack-plugin 4 (#92) and minor
+  updates (#88), applied together in #93. The confirmation bar stays at the
+  top of a toast under Toastify 11. `glob` and `minimatch` patched so the
+  audit passes.
+- CodeQL drops a result only when every location it names is in a
+  third-party package (#86). The filter's test passes on a CRLF checkout
+  (#87).
 
 ## 0.3.8
 
