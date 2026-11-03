@@ -42,6 +42,7 @@ This result applies to that package and Chromium executable, with the earlier CL
 | --- | --- |
 | Create | Generated phrase confirmation, encrypted SDK keyfile persistence, successful unlock, and expected encrypted keyfile shape. Confirmation supports generated 12- or 24-word phrases, including repeated words; the pinned SDK's random creation uses 32-byte entropy and is expected to produce 24 words. |
 | Unlock | Incorrect password rejected without a live shared unlock; correct password accepted. |
+| Startup read failure | An instrumented read refusal shows E225 and Retry, preserves the encrypted keyfile, and cannot become onboarding. Removing the fault permits a normal retry. |
 | Backup | Incorrect password reveals no phrase DOM; correct password recovers the generated phrase. |
 | Explicit lock | Backup DOM removed from two extension pages, shared secret revoked, and public state withdrawn. A non-secret locked tombstone is permitted. |
 | Password rotation | Incorrect current password preserves the keyfile; valid rotation changes encrypted bytes while preserving account identity. Old password rejected, new password accepted, and recovered phrase unchanged. |
@@ -53,6 +54,8 @@ This result applies to that package and Chromium executable, with the earlier CL
 | Runtime reload | `chrome.runtime.reload()` invalidates the old extension generation. Both transports verify the same enabled ID without a replacement registration. Both preserve encrypted data and require another password unlock. |
 | Recovery import | The generated backup imports under another name with matching account identity and independently encrypted bytes. |
 | Removal | Incorrect password preserves the wallet. Removing one import revokes its session, preserves the other encrypted entry, and leaves that other wallet unlockable. Removing the last wallet returns to onboarding and withdraws shared secrets. |
+
+The startup-read case instruments `Storage.prototype.getItem` for the wallet map in one test page, then restores it and retries. It never supplies or reconstructs a wallet value. This is a controlled storage-boundary refusal, not evidence that the historical CI failure had the same cause.
 
 One case intentionally instruments `Storage.prototype.setItem` to reject the wallet write **after real encryption**. It confirms that the fault was reached, restores the original method, checks that no wallet or live unlock was created, and retries. This is a storage fault-injection case, separate from ordinary real-crypto lifecycle qualification; it does not replace Argon2, AES, or the application callback.
 

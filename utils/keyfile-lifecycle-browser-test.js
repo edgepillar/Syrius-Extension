@@ -9,6 +9,7 @@ const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { startBrowser } = require('./fixtures/production-browser');
+const { walletStorageState } = require('./fixtures/wallet-storage-state');
 
 const source = path.resolve(process.env.SYRIUS_EXTENSION_DIR || path.join(__dirname, '..', 'build'));
 let temporary, extensionDir, profileDir, cleanupPromise;
@@ -201,6 +202,34 @@ const unlock = async (value, success) => {
     assert(created?.encryptedShape && created.noPersistentPhraseOrPassword, 'Only encrypted keyfile persists');
     casePassed('UI creation persists a real encrypted SDK keyfile');
 
+    stage = 'startup wallet read failure';
+    const readFaultPage = await browser.openPage();
+    const readHook = await browser.cdp('Page.addScriptToEvaluateOnNewDocument', { source: `
+      globalThis.__qualificationReadOriginal = Storage.prototype.getItem;
+      globalThis.__qualificationReadBlocked = false;
+      Storage.prototype.getItem = function(key) {
+        if (key === 'znn.ts-wallet') {
+          globalThis.__qualificationReadBlocked = true;
+          throw new DOMException('Synthetic private read diagnostic', 'SecurityError');
+        }
+        return globalThis.__qualificationReadOriginal.call(this, key);
+      };
+    ` }, readFaultPage.sessionId);
+    await browser.cdp('Page.reload', {}, readFaultPage.sessionId);
+    await browser.until(readFaultPage, `globalThis.__qualificationReadBlocked === true &&
+      document.querySelector('.page[role="alert"]')?.textContent.includes('E225')`, 'startup storage failure', 60000);
+    assert(await browser.evaluate(readFaultPage, `!document.querySelector('.onboarding-actions') &&
+      !document.body.textContent.includes('Synthetic private read diagnostic') &&
+      document.querySelectorAll('.mnemonic-original-word').length === 0`), 'Unreadable storage cannot become a fresh-wallet screen or expose its diagnostic');
+    await browser.evaluate(readFaultPage, 'Storage.prototype.getItem = globalThis.__qualificationReadOriginal');
+    await browser.cdp('Page.removeScriptToEvaluateOnNewDocument', { identifier: readHook.identifier }, readFaultPage.sessionId);
+    await browser.evaluate(readFaultPage, `(() => { const button = [...document.querySelectorAll('button')].find(el => el.textContent.trim() === 'Retry'); if (!button) return false; button.click(); return true; })()`);
+    await browser.until(readFaultPage, `location.hash.startsWith('#/tabs/') && Boolean(document.querySelector('[aria-label="Menu"]'))`, 'startup read retry', 60000);
+    assert.equal((await snapshot(walletName)).encrypted, created.encrypted, 'A failed startup read and retry preserve the real encrypted wallet');
+    await browser.closePage(readFaultPage);
+    report.startup_read_failure_is_instrumented = true;
+    casePassed('startup read failure preserves the wallet and retries without onboarding');
+
     stage = 'password rejection and backup';
     await lock();
     await unlock(incorrectPassword, false);
@@ -373,7 +402,7 @@ const unlock = async (value, success) => {
     report.failure_code = error.code || 'ASSERTION_FAILED';
     if (error.method) report.failure_method = error.method;
     if (browser && page) {
-      try { report.failure_observation = await evaluate(`({ route: location.hash.split('?')[0], named_inputs: [...document.querySelectorAll('input[name]')].map(e => e.name), backup_nodes: document.querySelectorAll('.mnemonic-original-word').length, error_toast: Boolean(document.querySelector('.Toastify__toast--error')), injected_write_failed: globalThis.__qualificationWriteFailed === true, create_button_busy: [...document.querySelectorAll('button')].some(e => e.textContent.trim() === 'Creating…') })`); } catch { /* Diagnostics are optional and never include secrets. */ }
+      try { report.failure_observation = await evaluate(`({ route: location.hash.split('?')[0], wallet_store_state: (${walletStorageState.toString()})(localStorage), named_inputs: [...document.querySelectorAll('input[name]')].map(e => e.name), backup_nodes: document.querySelectorAll('.mnemonic-original-word').length, error_toast: Boolean(document.querySelector('.Toastify__toast--error')), injected_write_failed: globalThis.__qualificationWriteFailed === true, create_button_busy: [...document.querySelectorAll('button')].some(e => e.textContent.trim() === 'Creating…') })`); } catch { /* Diagnostics are optional and never include secrets. */ }
       report.network_at_failure = { ...browser.stats };
     }
     // Never print a DOM dump, evaluated expression, underlying exception or
