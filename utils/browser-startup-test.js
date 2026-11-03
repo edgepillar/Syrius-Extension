@@ -28,7 +28,7 @@ const install = async ({ existing = [], loaded = true, enabled = true, expectedE
     extensionDir: '/owned/extension', settings: { sessionId: 'owned-settings' }, expectedExtensionId,
     extensionId: undefined, stats: { persistentInstallReused: false }, failure,
     matchingInstalls: async () => calls++ === 0 ? existing : [{ id, enabled }],
-    cdp: async (method, params, sessionId) => { commands.push({ method, params, sessionId }); return {}; },
+    cdp: async (method, params, sessionId) => { commands.push({ method, params, sessionId }); return { id }; },
     evaluate: async (_page, expression) => { commands.push({ method: 'evaluate', expression }); return loaded; },
   };
   const result = await vm.runInNewContext('(async () => {\n' + installSource.slice(first, last) +
@@ -101,14 +101,10 @@ const install = async ({ existing = [], loaded = true, enabled = true, expectedE
   const id = 'a'.repeat(32);
   const fresh = await install();
   assert.equal(fresh.result.id, id); assert.equal(fresh.result.reused, false);
-  assert.deepEqual(fresh.commands.map(command => command.method), ['Input.dispatchDragEvent', 'evaluate', 'Input.dispatchDragEvent']);
-  assert.equal(fresh.commands[0].params.type, 'dragEnter');
-  assert.equal(fresh.commands[0].params.data.files[0], '/owned/extension');
-  assert.equal(fresh.commands[0].sessionId, 'owned-settings');
-  assert.match(fresh.commands[1].expression, /notifyDragInstallInProgress/);
-  assert.match(fresh.commands[1].expression, /loadUnpacked\(\{useDraggedPath:true/);
-  assert.equal(fresh.commands[2].params.type, 'dragCancel');
-  cases.push('first install uses the native developer directory-drop path');
+  assert.deepEqual(fresh.commands.map(command => command.method), ['Extensions.loadUnpacked', 'evaluate']);
+  assert.equal(fresh.commands[0].params.path, '/owned/extension');
+  assert.match(fresh.commands[1].expression, /developerPrivate\.reload/);
+  cases.push('initial registration is prepared through the native developer reload');
 
   const existing = await install({ existing: [{ id, enabled: true }], expectedExtensionId: id });
   assert.equal(existing.result.reused, true); assert.equal(existing.commands.length, 0);
@@ -122,6 +118,26 @@ const install = async ({ existing = [], loaded = true, enabled = true, expectedE
   await assert.rejects(install({ loaded: false }), { code: 'BROWSER_PERSISTENT_INSTALL_FAILED' });
   await assert.rejects(install({ enabled: false }), { code: 'BROWSER_PERSISTENT_INSTALL_FAILED' });
   cases.push('disabled, ambiguous and unsuccessful installations fail closed');
+  const lifecycle = fs.readFileSync(path.join(__dirname, 'keyfile-lifecycle-browser-test.js'), 'utf8');
+  const begin = lifecycle.indexOf("    stage = 'persistent install preparation';");
+  const end = lifecycle.indexOf('    report.browser = browser.browserVersion;', begin);
+  assert(begin > 0 && end > begin);
+  const prepare = async (clean = true) => {
+    const actions = [];
+    const state = { browser: null, report: {}, stage: '', assert, casePassed: () => {},
+      launch: async () => {
+        actions.push('launch');
+        state.browser = { id, stats: { persistentInstallReused: actions.length > 1 },
+          stop: async () => { actions.push('stop'); state.browser.stats.shutdownClean = clean; } };
+      } };
+    await vm.runInNewContext('(async () => {\n' + lifecycle.slice(begin, end) + '\n})()', state);
+    return { actions, report: state.report };
+  };
+  const prepared = await prepare();
+  assert.deepEqual(prepared.actions, ['launch', 'stop', 'launch']);
+  assert.equal(prepared.report.bootstrap_browser_network.shutdownClean, true);
+  await assert.rejects(prepare(false));
+  cases.push('an empty-profile restart completes before any wallet is created and refuses unclean shutdown');
   console.log(JSON.stringify({ browser_startup_controls: true, cases, passed: true }));
 })().catch(error => {
   console.log(JSON.stringify({ browser_startup_controls: true, passed: false, failure_code: error.code || 'ASSERTION_FAILED' }));

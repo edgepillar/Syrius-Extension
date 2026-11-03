@@ -389,19 +389,17 @@ const startBrowser = async ({ extensionDir, profileDir, setupScript = '', expect
       extensionId = installed[0].id;
       stats.persistentInstallReused = true;
     } else {
-      // Install through the same developer API as a directory dropped onto
-      // chrome://extensions. CDP's loadUnpacked marks an install as temporary;
-      // a later reload is not a reliable persistent-install boundary.
-      await cdp('Input.dispatchDragEvent', { type: 'dragEnter', x: 10, y: 10,
-        data: { items: [], files: [extensionDir], dragOperationsMask: 1 } }, settings.sessionId);
-      const loaded = await evaluate(settings, 'new Promise(resolve => { chrome.developerPrivate.notifyDragInstallInProgress(); chrome.developerPrivate.loadUnpacked({useDraggedPath:true,failQuietly:true,populateError:true}, result => resolve(!chrome.runtime.lastError && !result)); })');
-      await cdp('Input.dispatchDragEvent', { type: 'dragCancel', x: 10, y: 10,
-        data: { items: [], files: [], dragOperationsMask: 0 } }, settings.sessionId);
+      extensionId = (await cdp('Extensions.loadUnpacked', { path: extensionDir })).id;
+      if (!/^[a-p]{32}$/.test(extensionId || '')) throw failure('BROWSER_EXTENSION_UNAVAILABLE');
+      // Chrome discards CDP-installed registrations at its next startup. Use
+      // its ordinary developer reload before creating any test wallet data,
+      // then require the same enabled install to survive subsequent starts.
+      const reloaded = await evaluate(settings, 'new Promise(resolve => chrome.developerPrivate.reload(' +
+        JSON.stringify(extensionId) + ', {failQuietly:true,populateErrorForUnpacked:true}, result => resolve(!chrome.runtime.lastError && !result)))');
       installed = await matchingInstalls();
-      if (!loaded || installed.length !== 1 || installed[0].enabled !== true) {
+      if (!reloaded || installed.length !== 1 || installed[0].id !== extensionId || installed[0].enabled !== true) {
         throw failure('BROWSER_PERSISTENT_INSTALL_FAILED');
       }
-      extensionId = installed[0].id;
     }
     await closePage(settings);
     if (!/^[a-p]{32}$/.test(extensionId || '')) throw failure('BROWSER_EXTENSION_UNAVAILABLE');

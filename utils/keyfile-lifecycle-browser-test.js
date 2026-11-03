@@ -145,7 +145,20 @@ const unlock = async (value, success) => {
     report.package_version = manifest.version;
     report.package_tree_sha256 = treeDigest(source);
     assert.equal(treeDigest(extensionDir), report.package_tree_sha256, 'Package copied without changes');
+    stage = 'persistent install preparation';
     await launch();
+    const initialBrowserId = browser.id;
+    const initialNetwork = browser.stats;
+    await browser.stop(); browser = null;
+    report.bootstrap_browser_network = { ...initialNetwork };
+    assert.equal(initialNetwork.shutdownClean, true, 'Installation preparation ends with a normal browser exit');
+    // Settle the initial CDP registration's lifetime before the UI generates
+    // any wallet data. The later restart still has to retain the real wallet;
+    // no package registration or application storage is recreated there.
+    await launch();
+    assert.equal(browser.id, initialBrowserId, 'Prepared install keeps the same extension identity');
+    assert.equal(browser.stats.persistentInstallReused, true, 'Prepared install is retained without registration');
+    casePassed('empty-profile restart prepares a persistent installation');
     report.browser = browser.browserVersion;
     page = await browser.openPage('/auth/get-started');
     await until(`Boolean(${element('input[name="walletNameField"]')})`, 'creation form');
