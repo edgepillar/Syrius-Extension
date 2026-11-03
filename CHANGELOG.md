@@ -9,6 +9,9 @@ New
   are waiting, and a banner on the wallet's screens opens them again.
 - Home's ZNN and QSR balances flash green when they rise and red when they
   fall, then fade back.
+- Home says when a newer release is out, between the balance and Activity.
+  Tapping it opens Settings, About to update. Dismissed, it stays hidden
+  until the browser or app next starts.
 
 Fixed
 - Home's balances blanked for a moment each time a send confirmed or a

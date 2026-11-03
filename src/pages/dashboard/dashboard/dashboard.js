@@ -6,6 +6,7 @@ import { Zenon } from 'znn-ts-sdk';
 import TransactionItem from '../../../components/transaction-item/transaction-item';
 import Icon from '../../../components/icon/icon';
 import ZapModal from '../../../components/modals/zap-modal';
+import UpdateNotice from '../../../components/update-notice/update-notice';
 import { ModalContext } from '../../../services/hooks/modal/modalContext';
 import { takeNew } from '../../../services/zap/zap';
 import { inPhase } from '../../../services/utils/edgeLight';
@@ -460,6 +461,8 @@ const Dashboard = () => {
             : `${pendingCount} pending — tap to receive`}
         </button>
       )}
+
+      <UpdateNotice />
 
       <section className="activity">
         <h3 className="section-title">Activity</h3>
